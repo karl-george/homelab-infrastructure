@@ -1,29 +1,7 @@
 ---
-- name: Configure common packages
+- name: Configure common server baseline
   hosts: all
   become: true
 
-  tasks:
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-
-    - name: Install common packages
-      apt:
-        name:
-          - tree
-          - curl
-          - vim
-          - htop
-          - git
-        state: present
-
-    - name: Ensure UFW is installed
-      apt:
-        name: ufw
-        state: present
-
-    - name: Ensure chrony is installed
-      apt:
-        name: chrony
-        state: present
+  roles:
+    - common
