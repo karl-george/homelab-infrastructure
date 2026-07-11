@@ -1,0 +1,40 @@
+---
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Nginx is enabled and running
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+
+- name: Deploy Employee Directory Nginx configuration
+  ansible.builtin.template:
+    src: employee-directory.conf.j2
+    dest: "/etc/nginx/sites-available/{{ nginx_site_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Enable Employee Directory Nginx site
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ nginx_site_name }}"
+    dest: "/etc/nginx/sites-enabled/{{ nginx_site_name }}"
+    state: link
+  notify: Realod nginx
+
+- name: Disable default Nginx site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Validate Nginx configuration
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false
