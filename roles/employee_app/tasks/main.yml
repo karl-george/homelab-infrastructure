@@ -1,0 +1,77 @@
+- name: Install application system packages
+  ansible.builtin.apt:
+    name:
+      - git
+      - python3
+      - python3-pip
+      - python3-venv
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure application root directory exists
+  ansible.builtin.file:
+    path: "{{ employee_app_root }}"
+    state: directory
+    owner: "{{ employee_app_user }}"
+    group: "{{ employee_app_group }}"
+    mode: "0755"
+
+- name: Clone or update Employee Directory repository
+  ansible.builtin.git:
+    repo: "{{ employee_app_repo }}"
+    dest: "{{ employee_app_directory }}"
+    version: "{{ employee_app_version }}"
+    update: true
+    force: false
+  become_user: "{{ employee_app_user }}"
+  notify: Restart employee application
+
+- name: Create Python virtual environment
+  ansible.builtin.command:
+    cmd: "python3 -m venv {{ employee_app_venv_directory }}"
+    creates: "{{ employee_app_venv_directory }}/bin/python"
+
+- name: Install Python requirements
+  ansible.builtin.pip:
+    requirements: "{{ employee_app_requirements_file }}"
+    virtualenv: "{{ employee_app_venv_directory }}"
+  notify: Restart employee application
+
+- name: Deploy systemd service
+  ansible.builtin.template:
+    src: employee-directory.service.j2
+    dest: "/etc/systemd/system/{{ employee_app_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart employee application
+
+- name: Flush handlers before starting service
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure Employee Directory service is enabled and running
+  ansible.builtin.service:
+    name: "{{ employee_app_service_name }}"
+    state: started
+    enabled: true
+
+- name: Wait for Gunicorn to listen on the application port
+  ansible.builtin.wait_for:
+    host: "{{ employee_app_bind_address }}"
+    port: "{{ employee_app_bind_port }}"
+    state: started
+    timeout: 30
+
+- name: Verify application health endpoint
+  ansible.builtin.uri:
+    url: "{{ employee_app_healthcheck_url }}"
+    method: GET
+    status_code: 200
+    return_content: false
+  register: employee_app_healthcheck
+  retries: 5
+  delay: 2
+  until: employee_app_healthcheck.status == 200

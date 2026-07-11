@@ -1,8 +1,9 @@
 ---
-- name: Configure web servers
+- name: Configure production web servers
   hosts: web01
   become: true
 
   roles:
     - common
+    - employee_app
     - nginx
