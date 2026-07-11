@@ -1,0 +1,12 @@
+---
+nginx_site_name: employee-directory
+nginx_listen_port: 80
+nginx_server_name: _
+nginx_backend_address: 127.0.0.1
+nginx_backend_port: 8000
+
+nginx_security_headers:
+  - 'X-Content-Type-Options: "nosniff" always'
+  - 'X-Frame-Options: "SAMEORIGIN" always'
+  - 'Referrer-Policy: "strict-origin-when-cross-origin" always'
+  - 'Permissions-Policy "camera=(), microphone=(), geolocation=()" always'
