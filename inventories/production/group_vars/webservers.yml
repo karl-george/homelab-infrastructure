@@ -1,0 +1,3 @@
+employee_app_version: main
+employee_app_workers: 3
+nginx_server_name: production.local
