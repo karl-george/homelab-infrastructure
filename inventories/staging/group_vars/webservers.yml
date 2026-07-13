@@ -1,0 +1,3 @@
+employee_app_version: develop
+employee_app_workers: 3
+nginx_server_name: staging.local

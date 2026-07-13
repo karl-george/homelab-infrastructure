@@ -1,6 +1,6 @@
 ---
 - name: Configure production web servers
-  hosts: web01
+  hosts: all
   become: true
 
   roles:
