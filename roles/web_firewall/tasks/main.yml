@@ -1,0 +1,13 @@
+---
+- name: Allow HTTP traffic
+  community.general.ufw:
+    rule: allow
+    port: "{{ web_firewall_http_port | string }}"
+    proto: tcp
+
+- name: Allow HTTPS traffic
+  community.general.ufw:
+    rule: allow
+    port: "{{ web_firewall_https_port | string }}"
+    proto: tcp
+  when: web_firewall_https_enabled

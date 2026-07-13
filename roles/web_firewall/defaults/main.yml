@@ -1,0 +1,4 @@
+---
+web_firewall_http_port: 80
+web_firewall_https_enabled: false
+web_firewall_https_port: 443

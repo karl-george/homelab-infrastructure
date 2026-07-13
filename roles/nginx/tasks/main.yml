@@ -7,7 +7,7 @@
     cache_valid_time: 3600
 
 - name: Ensure Nginx is enabled and running
-  ansible.builtin.service:
+  ansible.builtin.systemd:
     name: nginx
     state: started
     enabled: true
@@ -26,7 +26,8 @@
     src: "/etc/nginx/sites-available/{{ nginx_site_name }}"
     dest: "/etc/nginx/sites-enabled/{{ nginx_site_name }}"
     state: link
-  notify: Realod nginx
+    force: true
+  notify: Reload nginx
 
 - name: Disable default Nginx site
   ansible.builtin.file:
@@ -38,3 +39,6 @@
   ansible.builtin.command:
     cmd: nginx -t
   changed_when: false
+
+- name: Flush Nginx handlers
+  ansible.builtin.meta: flush_handlers

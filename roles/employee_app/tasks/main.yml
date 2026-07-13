@@ -1,3 +1,4 @@
+---
 - name: Install application system packages
   ansible.builtin.apt:
     name:
@@ -31,14 +32,40 @@
   ansible.builtin.command:
     cmd: "python3 -m venv {{ employee_app_venv_directory }}"
     creates: "{{ employee_app_venv_directory }}/bin/python"
+  become_user: "{{ employee_app_user }}"
 
 - name: Install Python requirements
   ansible.builtin.pip:
     requirements: "{{ employee_app_requirements_file }}"
     virtualenv: "{{ employee_app_venv_directory }}"
+  become_user: "{{ employee_app_user }}"
   notify: Restart employee application
 
-- name: Deploy systemd service
+- name: Initialise Employee Directory database
+  ansible.builtin.command:
+    cmd: "{{ employee_app_venv_directory }}/bin/python init_db.py"
+    chdir: "{{ employee_app_source_directory }}"
+  become_user: "{{ employee_app_user }}"
+  changed_when: false
+
+- name: Verify Employee Directory database file exists
+  ansible.builtin.stat:
+    path: "{{ employee_app_database_file }}"
+  register: employee_app_database
+
+- name: Fail when Employee Directory database was not created
+  ansible.builtin.assert:
+    that:
+      - employee_app_database.stat.exists
+      - employee_app_database.stat.isreg
+      - employee_app_database.stat.pw_name == employee_app_user
+    fail_msg: >-
+      The Employee Directory database was not created correctly or is not
+      owned by {{ employee_app_user }}.
+    success_msg: >-
+      The Employee Directory database exists and has the expected ownership.
+
+- name: Deploy Employee Directory systemd service
   ansible.builtin.template:
     src: employee-directory.service.j2
     dest: "/etc/systemd/system/{{ employee_app_service_name }}.service"
@@ -49,29 +76,38 @@
     - Reload systemd
     - Restart employee application
 
-- name: Flush handlers before starting service
+- name: Validate Employee Directory systemd service
+  ansible.builtin.command:
+    cmd: >-
+      systemd-analyze verify
+      /etc/systemd/system/{{ employee_app_service_name }}.service
+  changed_when: false
+
+- name: Flush application handlers
   ansible.builtin.meta: flush_handlers
 
 - name: Ensure Employee Directory service is enabled and running
-  ansible.builtin.service:
+  ansible.builtin.systemd:
     name: "{{ employee_app_service_name }}"
     state: started
     enabled: true
 
-- name: Wait for Gunicorn to listen on the application port
+- name: Wait for Gunicorn to listen on its local port
   ansible.builtin.wait_for:
     host: "{{ employee_app_bind_address }}"
     port: "{{ employee_app_bind_port }}"
     state: started
     timeout: 30
 
-- name: Verify application health endpoint
+- name: Verify Employee Directory backend health
   ansible.builtin.uri:
     url: "{{ employee_app_healthcheck_url }}"
     method: GET
     status_code: 200
-    return_content: false
+    return_content: true
   register: employee_app_healthcheck
   retries: 5
   delay: 2
-  until: employee_app_healthcheck.status == 200
+  until:
+    - employee_app_healthcheck.status == 200
+    - "'healthy' in employee_app_healthcheck.content"
