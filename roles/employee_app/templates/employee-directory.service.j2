@@ -1,19 +1,20 @@
 [Unit]
 Description=Employee Directory
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
+Type=simple
 User={{ employee_app_user }}
 Group={{ employee_app_group }}
-
 WorkingDirectory={{ employee_app_source_directory }}
-
 Environment="PATH={{ employee_app_venv_directory }}/bin"
-
 ExecStart={{ employee_app_venv_directory }}/bin/gunicorn --workers {{ employee_app_workers }} --bind {{ employee_app_bind_address }}:{{ employee_app_bind_port }} app:app
 
 Restart=always
 RestartSec=5
+PrivateTmp=true
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target

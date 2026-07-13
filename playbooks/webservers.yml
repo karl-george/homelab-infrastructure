@@ -1,9 +1,27 @@
 ---
-- name: Configure production web servers
-  hosts: all
+- name: Configure Employee Directory web servers
+  hosts: webservers
   become: true
 
   roles:
     - common
+    - web_firewall
     - employee_app
     - nginx
+
+  post_tasks:
+    - name: Validate active Nginx configuration
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+
+    - name: Verify Employee Directory through Nginx
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ nginx_listen_port }}/"
+        method: GET
+        status_code: 200
+        return_content: false
+      register: nginx_employee_app_healthcheck
+      retries: 5
+      delay: 2
+      until: nginx_employee_app_healthcheck.status == 200
