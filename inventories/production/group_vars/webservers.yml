@@ -1,3 +1,11 @@
+---
+deployment_environment: production
+
 employee_app_version: main
 employee_app_workers: 3
-nginx_server_name: production.local
+
+nginx_server_name: _
+nginx_listen_port: 80
+
+web_firewall_http_port: 80
+web_firewall_https_enabled: false

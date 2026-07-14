@@ -265,3 +265,173 @@ Common causes:
 - unmanaged server edits;
 - variable values changing between runs;
 - package cache tasks without `cache_valid_time`.
+
+## Staging deploys the wrong branch
+
+Inspect resolved variables:
+
+```bash
+ansible-inventory \
+  -i inventories/staging/hosts.ini \
+  --host web02
+```
+
+Expected:
+
+```yaml
+employee_app_version: develop
+```
+
+Inspect the deployed branch:
+
+```bash
+ansible web02 \
+  -i inventories/staging/hosts.ini \
+  -m ansible.builtin.command \
+  -a "git -C /opt/apps/employee-directory branch --show-current"
+```
+
+Expected:
+
+```text
+develop
+```
+
+---
+
+## Production deploys the wrong branch
+
+Inspect:
+
+```bash
+ansible-inventory \
+  -i inventories/production/hosts.ini \
+  --host web01
+```
+
+Expected:
+
+```yaml
+employee_app_version: main
+```
+
+---
+
+## `Failed to checkout develop`
+
+Verify `develop` exists in the application repository:
+
+```bash
+cd ~/projects/employee-directory
+git ls-remote --exit-code --heads origin develop
+```
+
+Do not create the branch in the infrastructure repository.
+
+---
+
+## Health endpoint reports the wrong environment
+
+Inspect the generated service:
+
+```bash
+ansible web02 \
+  -i inventories/staging/hosts.ini \
+  -b \
+  -m ansible.builtin.command \
+  -a "systemctl cat employee-directory"
+```
+
+Expected:
+
+```ini
+Environment="DEPLOYMENT_ENVIRONMENT=staging"
+```
+
+If the service template changed, confirm systemd was reloaded and the application restarted.
+
+---
+
+## Staging database table is missing
+
+Run:
+
+```bash
+ansible web02 \
+  -i inventories/staging/hosts.ini \
+  -m ansible.builtin.command \
+  -a "/opt/apps/employee-directory/app/venv/bin/python /opt/apps/employee-directory/app/init_db.py"
+```
+
+Confirm the `develop` branch contains:
+
+```text
+app/init_db.py
+```
+
+Do not copy production's SQLite file to staging.
+
+---
+
+## Staging change appears in production before promotion
+
+Check whether production was deployed accidentally:
+
+```bash
+ansible web01 \
+  -i inventories/production/hosts.ini \
+  -m ansible.builtin.command \
+  -a "git -C /opt/apps/employee-directory rev-parse HEAD"
+```
+
+Inspect Git history and deployment logs.
+
+Separate inventories prevent cross-environment targeting, but they cannot protect against an engineer deliberately running the production command.
+
+---
+
+## New untested commits appeared on `develop`
+
+Compare the deployed staging revision:
+
+```bash
+ansible web02 \
+  -i inventories/staging/hosts.ini \
+  -m ansible.builtin.command \
+  -a "git -C /opt/apps/employee-directory rev-parse HEAD"
+```
+
+with:
+
+```bash
+cd ~/projects/employee-directory
+git checkout develop
+git pull origin develop
+git rev-parse HEAD
+```
+
+If they differ, redeploy and retest staging before promotion.
+
+---
+
+## One environment modifies the other environment's data
+
+This should not happen because each server has its own SQLite file.
+
+Verify database paths on each host:
+
+```bash
+ansible web01 \
+  -i inventories/production/hosts.ini \
+  -m ansible.builtin.stat \
+  -a "path=/opt/apps/employee-directory/app/employees.db"
+```
+
+```bash
+ansible web02 \
+  -i inventories/staging/hosts.ini \
+  -m ansible.builtin.stat \
+  -a "path=/opt/apps/employee-directory/app/employees.db"
+```
+
+Identical paths on different hosts do not refer to the same physical file.
