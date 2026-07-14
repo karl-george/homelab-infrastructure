@@ -1,6 +1,8 @@
 ---
 employee_app_name: employee-directory
 
+deployment_environment: production
+
 employee_app_repo: "https://github.com/karl-george/employee-directory.git"
 employee_app_version: main
 
