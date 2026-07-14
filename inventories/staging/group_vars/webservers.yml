@@ -1,3 +1,11 @@
+---
+deployment_environment: staging
+
 employee_app_version: develop
-employee_app_workers: 3
-nginx_server_name: staging.local
+employee_app_workers: 2
+
+nginx_server_name: _
+nginx_listen_port: 80
+
+web_firewall_http_port: 80
+web_firewall_https_enabled: false
