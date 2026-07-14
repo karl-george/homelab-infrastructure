@@ -3,6 +3,11 @@
   hosts: webservers
   become: true
 
+  pre_tasks:
+    - name: Run application tests before deployment
+      ansible.builtin.include_role:
+        name: application_test
+
   roles:
     - common
     - web_firewall

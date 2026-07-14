@@ -1,0 +1,53 @@
+---
+- name: Run application deployment test gate
+  block:
+    - name: Create temporary application-test workspace
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: employee-directory-tests
+      register: application_test_workspace
+
+    - name: Check out requested application revision
+      ansible.builtin.git:
+        repo: "{{ application_test_repo }}"
+        dest: "{{ application_test_workspace.path }}/source"
+        version: "{{ application_test_version }}"
+        force: true
+
+    - name: Create isolated test virtual environment
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -m
+          - venv
+          - "{{ application_test_workspace.path }}/venv"
+        creates: "{{ application_test_workspace.path }}/venv/bin/python"
+
+    - name: Install application test dependencies
+      ansible.builtin.pip:
+        requirements: >-
+          {{ application_test_workspace.path }}/source/{{
+          application_test_requirements_file }}
+        virtualenv: "{{ application_test_workspace.path }}/venv"
+
+    - name: Run Employee Directory pytest suite
+      ansible.builtin.command:
+        argv:
+          - "{{ application_test_workspace.path }}/venv/bin/python"
+          - -m
+          - pytest
+          - -v
+          - "{{ application_test_directory }}"
+        chdir: "{{ application_test_workspace.path }}/source"
+      changed_when: false
+
+  always:
+    - name: Remove temporary application-test workspace
+      ansible.builtin.file:
+        path: "{{ application_test_workspace.path }}"
+        state: absent
+      when: application_test_workspace is defined
+
+  delegate_to: localhost
+  become: false
+  run_once: true

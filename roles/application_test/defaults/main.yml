@@ -1,0 +1,6 @@
+---
+application_test_repo: "{{ employee_app_repo }}"
+application_test_version: "{{ employee_app_version }}"
+
+application_test_requirements_file: app/requirements-test.txt
+application_test_directory: tests

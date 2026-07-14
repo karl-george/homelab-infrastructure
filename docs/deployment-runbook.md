@@ -497,3 +497,75 @@ ansible-inventory \
   -i inventories/production/hosts.ini \
   --graph
 ```
+
+## Automated test gate
+
+Every web-server deployment begins by testing the requested application
+revision on the automation VM.
+
+The test gate:
+
+1. clones the requested revision into a temporary directory;
+2. creates an isolated virtual environment;
+3. installs `requirements-test.txt`;
+4. runs pytest;
+5. removes the temporary workspace.
+
+If any test fails, Ansible stops before changing the target environment.
+
+### Run tests manually
+
+```bash
+cd ~/projects/employee-directory
+
+source app/venv/bin/activate
+python -m pytest -v
+deactivate
+```
+
+### Test-database safety
+
+pytest overrides the Flask `DATABASE` configuration with a database inside
+pytest's temporary directory.
+
+The following files are never used by tests:
+
+```text
+web01 employees.db
+web02 employees.db
+local app/employees.db
+```
+
+### Deployment order
+
+```text
+pytest
+  ↓
+staging or production configuration
+  ↓
+runtime health checks
+```
+
+````
+
+Also add the new failure case to `docs/troubleshooting.md`:
+
+```markdown
+## Deployment stops at the pytest gate
+
+Read the failing assertion in the Ansible output.
+
+Run the same revision locally:
+
+```bash
+cd ~/projects/employee-directory
+git checkout <revision>
+
+source app/venv/bin/activate
+pip install -r app/requirements-test.txt
+python -m pytest -v
+````
+
+Correct the application or test in Git.
+
+Do not bypass the test gate merely to complete a deployment.
