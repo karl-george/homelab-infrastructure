@@ -433,3 +433,67 @@ A deployment is successful only when:
 - public health returns HTTP 200;
 - the application operates correctly in a browser;
 - logs contain no unexplained errors.
+
+## Environment-specific deployments
+
+### Production
+
+```bash
+ansible-playbook \
+  -i inventories/production/hosts.ini \
+  playbooks/webservers.yml
+```
+
+Production targets:
+
+```text
+web01
+```
+
+Production deploys:
+
+```text
+main
+```
+
+### Staging
+
+```bash
+ansible-playbook \
+  -i inventories/staging/hosts.ini \
+  playbooks/webservers.yml
+```
+
+Staging targets:
+
+```text
+web02
+```
+
+Staging deploys:
+
+```text
+develop
+```
+
+### Safety rule
+
+Always specify the inventory explicitly.
+
+Do not depend on an implicit default inventory when multiple environments exist.
+
+Before deployment, inspect the target:
+
+```bash
+ansible-inventory \
+  -i inventories/staging/hosts.ini \
+  --graph
+```
+
+or:
+
+```bash
+ansible-inventory \
+  -i inventories/production/hosts.ini \
+  --graph
+```
