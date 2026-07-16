@@ -1,0 +1,14 @@
+# Ansible Vault password files
+*.vault-pass
+*.vault-password
+vault-password*
+.vault-password*
+*.pass
+
+# Decrypted secret files
+*.decrypted.yml
+*.plaintext.yml
+
+# Local environment files
+.env
+.env.*
