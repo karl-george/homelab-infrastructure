@@ -569,3 +569,24 @@ python -m pytest -v
 Correct the application or test in Git.
 
 Do not bypass the test gate merely to complete a deployment.
+
+## Vault Requirement
+
+Environment deployments require the corresponding vault identity.
+
+### Staging
+
+```bash
+--vault-id staging@~/.config/ansible-vault/staging.pass
+```
+
+### Production
+
+```bash
+--vault-id production@~/.config/ansible-vault/production.pass
+```
+
+A deployment without the required vault password fails before the target
+configuration is applied.
+
+Do not place vault password files inside the infrastructure repository.

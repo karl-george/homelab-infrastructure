@@ -435,3 +435,47 @@ ansible web02 \
 ```
 
 Identical paths on different hosts do not refer to the same physical file.
+
+## Ansible cannot decrypt vault variables
+
+Confirm the correct environment identity was supplied.
+
+Staging:
+
+```bash
+--vault-id staging@~/.config/ansible-vault/staging.pass
+```
+
+Production:
+
+```bash
+--vault-id production@~/.config/ansible-vault/production.pass
+```
+
+Check password-file metadata:
+
+```bash
+stat -c '%a %U %G %n' ~/.config/ansible-vault/*.pass
+```
+
+Expected mode:
+
+```text
+600
+```
+
+Do not print the password-file contents in shared terminal output.
+
+## Application fails after secret deployment
+
+Check only the environment-file metadata:
+
+```bash
+sudo stat -c '%U %G %a %n' \
+  /etc/employee-directory/employee-directory.env
+```
+
+Confirm the systemd unit contains the correct `EnvironmentFile` path.
+
+Review the application journal, but do not add debugging that prints the
+secret.
