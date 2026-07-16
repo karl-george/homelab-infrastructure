@@ -9,6 +9,10 @@ employee_app_version: main
 employee_app_user: base
 employee_app_group: base
 
+employee_app_secret_key: ""
+employee_app_config_directory: /etc/employee-directory
+employee_app_environment_file: "{{ employee_app_config_directory }}/employee-directory.env"
+
 employee_app_root: /opt/apps
 employee_app_directory: "{{ employee_app_root }}/{{ employee_app_name }}"
 employee_app_source_directory: "{{ employee_app_directory }}/app"

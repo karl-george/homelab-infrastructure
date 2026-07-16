@@ -4,6 +4,8 @@ deployment_environment: production
 employee_app_version: main
 employee_app_workers: 3
 
+employee_app_secret_key: "{{ vault_employee_app_secret_key }}"
+
 nginx_server_name: _
 nginx_listen_port: 80
 

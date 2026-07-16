@@ -4,6 +4,8 @@ deployment_environment: staging
 employee_app_version: develop
 employee_app_workers: 2
 
+employee_app_secret_key: "{{ vault_employee_app_secret_key }}"
+
 nginx_server_name: _
 nginx_listen_port: 80
 

@@ -18,6 +18,38 @@
     group: "{{ employee_app_group }}"
     mode: "0755"
 
+- name: Validate Employee Directory secret configuration
+  ansible.builtin.assert:
+    that:
+      - employee_app_secret_key is string
+      - employee_app_secret_key | length >= 32
+      - employee_app_secret_key != "development-only-secret-key"
+    fail_msg: >-
+      A valid environment-specific Employee Directory secret key must be
+      supplied through Ansible Vault.
+    success_msg: >-
+      Employee Directory secret configuration passed validation.
+  no_log: true
+
+- name: Ensure Employee Directory configuration directory exists
+  ansible.builtin.file:
+    path: "{{ employee_app_config_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Deploy Employee Directory secret environment file
+  ansible.builtin.template:
+    src: employee-directory.env.j2
+    dest: "{{ employee_app_environment_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+  notify: Restart employee application
+
 - name: Clone or update Employee Directory repository
   ansible.builtin.git:
     repo: "{{ employee_app_repo }}"
