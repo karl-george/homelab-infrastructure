@@ -1,0 +1,71 @@
+---
+- name: Determine Docker APT Architecture
+  ansible.builtin.set_fact:
+    docker_apt_architecture: >-
+      {{
+        {
+          'x86_64': 'amd64',
+          'aarch64': 'arm64',
+          'armv7l': 'armhf'
+        }.get(ansible_architecture, ansible_architecture)
+      }}
+
+- name: Install Docker Repository Prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure APT Keyring Directory Exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Docker Repository Signing Key
+  ansible.builtin.get_url:
+    url: "{{ docker_apt_key_url }}"
+    dest: "{{ docker_apt_key_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure Official Docker APT Repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb
+      [arch={{ docker_apt_architecture }}
+      signed-by={{ docker_apt_key_path }}]
+      {{ docker_apt_repository_url }}
+      {{ ansible_distribution_release }}
+      stable
+    filename: docker
+    state: present
+    update_cache: true
+
+- name: Install Docker Engine and Compose
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+
+- name: Ensure Docker Is Enabled and Running
+  ansible.builtin.systemd:
+    name: "{{ docker_service_name }}"
+    state: started
+    enabled: true
+
+- name: Verify Docker Engine
+  ansible.builtin.command:
+    cmd: docker version
+  changed_when: false
+
+- name: Verify Docker Compose Plugin
+  ansible.builtin.command:
+    cmd: docker compose version
+  changed_when: false
