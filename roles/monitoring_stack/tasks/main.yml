@@ -1,0 +1,291 @@
+---
+- name: Validate monitoring configuration
+  ansible.builtin.assert:
+    that:
+      - monitoring_bind_address is string
+      - monitoring_bind_address | length > 0
+      - grafana_admin_password is string
+      - grafana_admin_password | length >= 12
+      - grafana_admin_password != "admin"
+      - monitoring_desktop_address is string
+      - monitoring_log_client_addresses | length > 0
+    fail_msg: >-
+      The monitoring stack requires a valid bind address, desktop address,
+      log-client addresses and encrypted Grafana administrator password.
+  no_log: true
+
+- name: Ensure monitoring directory structure exists
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ monitoring_root_directory }}"
+      mode: "0755"
+
+    - path: "{{ monitoring_loki_directory }}"
+      mode: "0755"
+
+    - path: "{{ monitoring_grafana_directory }}"
+      mode: "0755"
+
+    - path: "{{ monitoring_grafana_dashboard_directory }}"
+      mode: "0755"
+
+    - path: "{{ monitoring_grafana_provisioning_directory }}"
+      mode: "0755"
+
+    - path: "{{ monitoring_grafana_datasource_provisioning_directory }}"
+      mode: "0755"
+
+    - path: "{{ monitoring_grafana_dashboard_provisioning_directory }}"
+      mode: "0755"
+
+- name: Deploy Loki configuration
+  ansible.builtin.template:
+    src: loki.yml.j2
+    dest: "{{ monitoring_loki_directory }}/loki.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring stack
+
+- name: Deploy Grafana configuration
+  ansible.builtin.template:
+    src: grafana.ini.j2
+    dest: "{{ monitoring_grafana_directory }}/grafana.ini"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring stack
+
+- name: Deploy Loki data-source provisioning
+  ansible.builtin.template:
+    src: datasource-loki.yml.j2
+    dest: >-
+      {{ monitoring_grafana_datasource_provisioning_directory }}/loki.yml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring stack
+
+- name: Deploy Grafana dashboard provider
+  ansible.builtin.template:
+    src: dashboard-provider.yml.j2
+    dest: >-
+      {{ monitoring_grafana_dashboard_provisioning_directory }}/dashboards.yml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring stack
+
+- name: Deploy centralised-logging dashboard
+  ansible.builtin.template:
+    src: centralised-logs.json.j2
+    dest: >-
+      {{ monitoring_grafana_dashboard_directory }}/centralised-logs.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring stack
+
+- name: Validate centralised-logging dashboard JSON
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - json.tool
+      - >-
+        {{ monitoring_grafana_dashboard_directory }}/centralised-logs.json
+  changed_when: false
+
+- name: Deploy monitoring Docker Compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ monitoring_root_directory }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring stack
+
+- name: Allow Grafana access from the desktop
+  community.general.ufw:
+    rule: allow
+    direction: in
+    from_ip: "{{ monitoring_desktop_address }}"
+    to_ip: "{{ monitoring_bind_address }}"
+    port: "{{ grafana_http_port | string }}"
+    proto: tcp
+    comment: Grafana access from desktop
+
+- name: Allow Loki ingestion from monitored hosts
+  community.general.ufw:
+    rule: allow
+    direction: in
+    from_ip: "{{ item }}"
+    to_ip: "{{ monitoring_bind_address }}"
+    port: "{{ loki_http_port | string }}"
+    proto: tcp
+    comment: Loki ingestion from monitored host
+  loop: "{{ monitoring_log_client_addresses }}"
+
+- name: Allow local Loki queries from monitoring host
+  community.general.ufw:
+    rule: allow
+    direction: in
+    from_ip: "{{ monitoring_bind_address }}"
+    to_ip: "{{ monitoring_bind_address }}"
+    port: "{{ loki_http_port | string }}"
+    proto: tcp
+    comment: Local Loki queries from monitoring host
+
+- name: Validate Docker Compose configuration
+  ansible.builtin.command:
+    cmd: docker compose config --quiet
+    chdir: "{{ monitoring_root_directory }}"
+  changed_when: false
+
+- name: Pull monitoring container images
+  ansible.builtin.command:
+    cmd: docker compose pull
+    chdir: "{{ monitoring_root_directory }}"
+  register: monitoring_compose_pull
+  changed_when: >-
+    'Downloaded newer image'
+    in monitoring_compose_pull.stdout
+    or
+    'Pull complete'
+    in monitoring_compose_pull.stdout
+
+- name: Start monitoring stack
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: "{{ monitoring_root_directory }}"
+  register: monitoring_compose_up
+  changed_when: >-
+    'Started'
+    in monitoring_compose_up.stderr
+    or
+    'Created'
+    in monitoring_compose_up.stderr
+    or
+    'Recreated'
+    in monitoring_compose_up.stderr
+
+- name: Wait for Loki readiness
+  ansible.builtin.uri:
+    url: >-
+      http://{{ monitoring_bind_address }}:{{
+      loki_http_port }}/ready
+    method: GET
+    status_code: 200
+    return_content: true
+  register: monitoring_loki_readiness
+  retries: 15
+  delay: 2
+  until: monitoring_loki_readiness.status == 200
+
+- name: Wait for Grafana
+  ansible.builtin.uri:
+    url: >-
+      http://{{ monitoring_bind_address }}:{{
+      grafana_http_port }}/api/health
+    method: GET
+    status_code: 200
+    return_content: true
+  register: monitoring_grafana_health
+  retries: 15
+  delay: 2
+  until: monitoring_grafana_health.status == 200
+
+- name: Apply pending monitoring-stack changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Grafana after provisioning changes
+  ansible.builtin.uri:
+    url: >-
+      http://{{ monitoring_bind_address }}:{{
+      grafana_http_port }}/api/health
+    method: GET
+    status_code: 200
+    return_content: true
+  register: monitoring_grafana_provisioned_health
+  retries: 15
+  delay: 2
+  until: monitoring_grafana_provisioned_health.status == 200
+
+- name: Synchronise Grafana administrator password
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - grafana
+      - grafana
+      - cli
+      - admin
+      - reset-admin-password
+      - "{{ grafana_admin_password }}"
+  changed_when: false
+  no_log: true
+
+- name: Verify provisioned Loki data source
+  ansible.builtin.uri:
+    url: >-
+      http://{{ monitoring_bind_address }}:{{
+      grafana_http_port }}/api/datasources/uid/{{
+      grafana_loki_datasource_uid }}
+    method: GET
+    url_username: "{{ grafana_admin_user }}"
+    url_password: "{{ grafana_admin_password }}"
+    force_basic_auth: true
+    status_code: 200
+    return_content: true
+  register: monitoring_grafana_loki_datasource
+  no_log: true
+
+- name: Confirm Loki data-source identity
+  ansible.builtin.assert:
+    that:
+      - monitoring_grafana_loki_datasource.json.uid
+        == grafana_loki_datasource_uid
+      - monitoring_grafana_loki_datasource.json.type == "loki"
+      - monitoring_grafana_loki_datasource.json.isDefault | bool
+    fail_msg: >-
+      Grafana did not provision Loki as the expected default data source.
+    success_msg: >-
+      Grafana provisioned Loki as the default data source.
+
+- name: Search for provisioned logging dashboard
+  ansible.builtin.uri:
+    url: >-
+      http://{{ monitoring_bind_address }}:{{
+      grafana_http_port }}/api/search?query={{
+      grafana_logging_dashboard_title | urlencode }}
+    method: GET
+    url_username: "{{ grafana_admin_user }}"
+    url_password: "{{ grafana_admin_password }}"
+    force_basic_auth: true
+    status_code: 200
+    return_content: true
+  register: monitoring_grafana_dashboard_search
+  no_log: true
+
+- name: Confirm centralised-logging dashboard exists
+  ansible.builtin.assert:
+    that:
+      - >-
+        monitoring_grafana_dashboard_search.json
+        | selectattr(
+            'uid',
+            'equalto',
+            grafana_logging_dashboard_uid
+          )
+        | list
+        | length
+        == 1
+    fail_msg: >-
+      Grafana did not load the provisioned centralised-logging dashboard.
+    success_msg: >-
+      Grafana loaded the provisioned centralised-logging dashboard.

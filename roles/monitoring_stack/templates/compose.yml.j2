@@ -1,0 +1,59 @@
+---
+services:
+  loki:
+    image: "grafana/loki:{{ loki_version }}"
+    container_name: loki
+
+    command:
+      - "-config.file=/etc/loki/loki.yml"
+
+    network_mode: host
+    restart: unless-stopped
+
+    volumes:
+      - "./loki/loki.yml:/etc/loki/loki.yml:ro"
+      - "loki_data:/loki"
+
+    logging:
+      driver: json-file
+
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  grafana:
+    image: "grafana/grafana:{{ grafana_version }}"
+    container_name: grafana
+
+    network_mode: host
+    restart: unless-stopped
+
+    depends_on:
+      - loki
+
+    volumes:
+      - "grafana_data:/var/lib/grafana"
+
+      - >-
+        ./grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+
+      - >-
+        ./grafana/provisioning:/etc/grafana/provisioning:ro
+
+      - >-
+        ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+
+    logging:
+      driver: json-file
+
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  loki_data:
+    name: monitoring_loki_data
+
+  grafana_data:
+    name: monitoring_grafana_data

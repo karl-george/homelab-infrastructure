@@ -1,0 +1,9 @@
+---
+- name: Deploy central monitoring platform
+  hosts: monitoring
+  become: true
+
+  roles:
+    - common
+    - docker_engine
+    - monitoring_stack

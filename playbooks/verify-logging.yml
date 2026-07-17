@@ -1,0 +1,121 @@
+---
+- name: Generate validation traffic on web servers
+  hosts: log_agents
+  become: true
+
+  tasks:
+    - name: Generate Nginx health-request log
+      ansible.builtin.uri:
+        url: http://127.0.0.1/health
+        method: GET
+        status_code: 200
+        return_content: false
+      changed_when: false
+
+- name: Verify log streams in Loki
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    loki_query_url: >-
+      http://192.168.56.10:3100/loki/api/v1/query_range
+
+  tasks:
+    - name: Wait for production Nginx access stream
+      ansible.builtin.uri:
+        url: >-
+          {{ loki_query_url }}?query={{
+          '{environment="production",host="web01",service="nginx-access"}'
+          | urlencode
+          }}&limit=5&direction=backward
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 5
+      register: logging_production_query
+      retries: 10
+      delay: 3
+      until: >-
+        logging_production_query.status | default(0) == 200
+        and logging_production_query.json is defined
+        and logging_production_query.json.status | default('') == 'success'
+        and (
+          logging_production_query.json.data.result
+          | default([])
+          | length
+        ) > 0
+
+    - name: Wait for staging Nginx access stream
+      ansible.builtin.uri:
+        url: >-
+          {{ loki_query_url }}?query={{
+          '{environment="staging",host="web02",service="nginx-access"}'
+          | urlencode
+          }}&limit=5&direction=backward
+        method: GET
+        status_code: 200
+        return_content: true
+      register: logging_staging_query
+      retries: 10
+      delay: 3
+      until: >-
+        logging_staging_query.status | default(0) == 200
+        and logging_staging_query.json is defined
+        and logging_staging_query.json.status | default('') == 'success'
+        and (
+          logging_staging_query.json.data.result
+          | default([])
+          | length
+        ) > 0
+
+    - name: Confirm production stream labels
+      ansible.builtin.assert:
+        that:
+          - >-
+            logging_production_query.json.data.result
+            | selectattr(
+                'stream.environment',
+                'equalto',
+                'production'
+              )
+            | list
+            | length
+            > 0
+          - >-
+            logging_production_query.json.data.result
+            | selectattr(
+                'stream.host',
+                'equalto',
+                'web01'
+              )
+            | list
+            | length
+            > 0
+        fail_msg: >-
+          Loki did not return the expected production labels.
+
+    - name: Confirm staging stream labels
+      ansible.builtin.assert:
+        that:
+          - >-
+            logging_staging_query.json.data.result
+            | selectattr(
+                'stream.environment',
+                'equalto',
+                'staging'
+              )
+            | list
+            | length
+            > 0
+          - >-
+            logging_staging_query.json.data.result
+            | selectattr(
+                'stream.host',
+                'equalto',
+                'web02'
+              )
+            | list
+            | length
+            > 0
+        fail_msg: >-
+          Loki did not return the expected staging labels.

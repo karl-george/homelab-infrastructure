@@ -1,0 +1,35 @@
+auth_enabled: false
+
+server:
+  http_listen_address: "{{ monitoring_bind_address }}"
+  http_listen_port: 3100
+  grpc_listen_address: "{{ monitoring_bind_address }}"
+  grpc_listen_port: 9096
+
+common:
+  path_prefix: /loki
+
+  ring:
+    instance_addr: "{{ monitoring_bind_address }}"
+    kvstore:
+      store: inmemory
+
+  replication_factor: 1
+
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+
+frontend:
+  address: "{{ monitoring_bind_address }}"
+
+schema_config:
+  configs:
+    - from: "2024-01-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h

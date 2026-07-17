@@ -1,0 +1,38 @@
+---
+alloy_apt_key_url: https://apt.grafana.com/gpg-full.key
+alloy_apt_key_path: /etc/apt/keyrings/grafana.asc
+
+alloy_apt_repository: >-
+  deb
+  [signed-by={{ alloy_apt_key_path }}]
+  https://apt.grafana.com
+  stable
+  main
+
+alloy_package_name: alloy
+alloy_package_state: present
+
+alloy_service_name: alloy
+alloy_service_user: alloy
+
+alloy_config_file: /etc/alloy/config.alloy
+alloy_environment_file: /etc/default/alloy
+alloy_storage_directory: /var/lib/alloy
+
+alloy_http_listen_address: 127.0.0.1
+alloy_http_listen_port: 12345
+
+alloy_loki_address: 127.0.0.1
+alloy_loki_port: 3100
+alloy_loki_push_path: /loki/api/v1/push
+
+alloy_environment: unknown
+alloy_host_name: "{{ inventory_hostname }}"
+
+alloy_journal_max_age: 12h
+
+alloy_employee_service_unit: employee-directory.service
+alloy_ssh_service_unit: ssh.service
+
+alloy_nginx_access_log: /var/log/nginx/access.log
+alloy_nginx_error_log: /var/log/nginx/error.log

@@ -1,0 +1,118 @@
+---
+- name: Validate Alloy role configuration
+  ansible.builtin.assert:
+    that:
+      - alloy_environment in ["production", "staging"]
+      - alloy_host_name is string
+      - alloy_host_name | length > 0
+      - alloy_loki_address is string
+      - alloy_loki_address | length > 0
+      - alloy_loki_port | int > 0
+      - alloy_http_listen_address == "127.0.0.1"
+      - alloy_http_listen_port | int > 0
+    fail_msg: >-
+      Alloy requires a valid environment, host name, Loki destination and
+      localhost-only HTTP listener.
+
+- name: Install Grafana repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - gpg
+      - wget
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure APT keyring directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Grafana repository signing key
+  ansible.builtin.get_url:
+    url: "{{ alloy_apt_key_url }}"
+    dest: "{{ alloy_apt_key_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure Grafana APT repository
+  ansible.builtin.apt_repository:
+    repo: "{{ alloy_apt_repository }}"
+    filename: grafana
+    state: present
+    update_cache: true
+
+- name: Install Grafana Alloy
+  ansible.builtin.apt:
+    name: "{{ alloy_package_name }}"
+    state: "{{ alloy_package_state }}"
+
+- name: Add Alloy user to log-reading groups
+  ansible.builtin.user:
+    name: "{{ alloy_service_user }}"
+    groups:
+      - adm
+      - systemd-journal
+    append: true
+  notify: Restart Alloy
+
+- name: Ensure Alloy storage directory exists
+  ansible.builtin.file:
+    path: "{{ alloy_storage_directory }}"
+    state: directory
+    owner: "{{ alloy_service_user }}"
+    group: "{{ alloy_service_user }}"
+    mode: "0750"
+
+- name: Deploy Alloy service environment
+  ansible.builtin.template:
+    src: alloy.default.j2
+    dest: "{{ alloy_environment_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Alloy
+
+- name: Deploy Alloy configuration
+  ansible.builtin.template:
+    src: config.alloy.j2
+    dest: "{{ alloy_config_file }}"
+    owner: root
+    group: "{{ alloy_service_user }}"
+    mode: "0640"
+  notify: Restart Alloy
+
+- name: Validate Alloy configuration
+  ansible.builtin.command:
+    argv:
+      - alloy
+      - validate
+      - "{{ alloy_config_file }}"
+  changed_when: false
+
+- name: Apply pending Alloy changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure Alloy is enabled and running
+  ansible.builtin.systemd:
+    name: "{{ alloy_service_name }}"
+    state: started
+    enabled: true
+
+- name: Wait for Alloy local HTTP interface
+  ansible.builtin.uri:
+    url: >-
+      http://{{ alloy_http_listen_address }}:{{
+      alloy_http_listen_port }}/-/ready
+    method: GET
+    status_code: 200
+    return_content: false
+  register: alloy_readiness
+  retries: 10
+  delay: 2
+  until: alloy_readiness.status == 200

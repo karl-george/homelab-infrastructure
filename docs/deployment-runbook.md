@@ -590,3 +590,79 @@ A deployment without the required vault password fails before the target
 configuration is applied.
 
 Do not place vault password files inside the infrastructure repository.
+
+## Monitoring platform deployment
+
+Deploy Grafana and Loki:
+
+```bash
+ansible-playbook \
+  -i inventories/monitoring/hosts.ini \
+  --vault-id monitoring@~/.config/ansible-vault/monitoring.pass \
+  playbooks/monitoring.yml
+```
+
+Deploy Alloy log agents:
+
+```bash
+ansible-playbook \
+  -i inventories/observability/hosts.ini \
+  playbooks/log-agents.yml
+```
+
+Verify log delivery:
+
+```bash
+ansible-playbook \
+  -i inventories/observability/hosts.ini \
+  playbooks/verify-logging.yml
+```
+
+## Deployment order
+
+When rebuilding the logging platform, use:
+
+```text
+1. Deploy Loki and Grafana.
+2. Confirm Loki readiness.
+3. Deploy Alloy agents.
+4. Generate validation traffic.
+5. Run the logging verification playbook.
+6. Open the Grafana dashboard.
+```
+
+Do not deploy Alloy before Loki is reachable.
+
+## Grafana access
+
+```text
+http://192.168.56.10:3000
+```
+
+The administrator password is stored in the monitoring Ansible Vault.
+
+## Operational checks
+
+Monitoring containers:
+
+```bash
+sudo docker compose \
+  -f /opt/infrastructure/monitoring/compose.yml \
+  ps
+```
+
+Alloy services:
+
+```bash
+ansible log_agents \
+  -i inventories/observability/hosts.ini \
+  -b \
+  -m ansible.builtin.command \
+  -a "systemctl is-active alloy"
+```
+
+Loki readiness:
+
+```bash
+curl http://192.168.56.10:3100/ready
+```

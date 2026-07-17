@@ -1,0 +1,40 @@
+monitoring_bind_address: 127.0.0.1
+
+monitoring_root_directory: /opt/infrastructure/monitoring
+
+monitoring_loki_directory: >-
+  {{ monitoring_root_directory }}/loki
+
+monitoring_grafana_directory: >-
+  {{ monitoring_root_directory }}/grafana
+
+monitoring_grafana_dashboard_directory: >-
+  {{ monitoring_grafana_directory }}/dashboards
+
+monitoring_grafana_provisioning_directory: >-
+  {{ monitoring_grafana_directory }}/provisioning
+
+monitoring_grafana_datasource_provisioning_directory: >-
+  {{ monitoring_grafana_provisioning_directory }}/datasources
+
+monitoring_grafana_dashboard_provisioning_directory: >-
+  {{ monitoring_grafana_provisioning_directory }}/dashboards
+
+grafana_version: "13.1"
+grafana_http_port: 3000
+grafana_admin_user: admin
+grafana_admin_password: ""
+
+grafana_loki_datasource_name: Loki
+grafana_loki_datasource_uid: loki
+
+grafana_logging_folder_name: Centralised Logging
+grafana_logging_dashboard_title: Centralised Logs
+grafana_logging_dashboard_uid: centralised-logs
+
+loki_version: "3.7.0"
+loki_http_port: 3100
+loki_retention_period: 168h
+
+monitoring_desktop_address: 127.0.0.1
+monitoring_log_client_addresses: []
