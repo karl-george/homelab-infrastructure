@@ -479,3 +479,124 @@ Confirm the systemd unit contains the correct `EnvironmentFile` path.
 
 Review the application journal, but do not add debugging that prints the
 secret.
+
+## Alloy is active but no logs appear
+
+Check its journal:
+
+```bash
+sudo journalctl -u alloy -n 100 --no-pager
+```
+
+Validate:
+
+```bash
+sudo alloy validate /etc/alloy/config.alloy
+```
+
+Check Loki:
+
+```bash
+curl -i http://192.168.56.10:3100/ready
+```
+
+## Alloy cannot read journald
+
+Check:
+
+```bash
+id alloy
+```
+
+The user should belong to:
+
+```text
+adm
+systemd-journal
+```
+
+Test:
+
+```bash
+sudo -u alloy \
+  journalctl -u employee-directory.service -n 5 --no-pager
+```
+
+## Alloy cannot read Nginx logs
+
+Test:
+
+```bash
+sudo -u alloy tail /var/log/nginx/access.log
+```
+
+Confirm the `alloy` user belongs to `adm`.
+
+## Loki has no label values
+
+Generate new traffic after Alloy starts:
+
+```bash
+curl http://127.0.0.1/health
+```
+
+Remember that the file source initially uses:
+
+```text
+tail_from_end = true
+```
+
+Existing historical file content is not sent during the initial deployment.
+
+## Loki rejects log delivery
+
+Check the Alloy journal for HTTP errors.
+
+Confirm that monitoring-host UFW permits TCP/3100 from:
+
+```text
+192.168.56.40
+192.168.56.50
+```
+
+Confirm Loki listens on:
+
+```text
+192.168.56.10:3100
+```
+
+## Dashboard shows no data
+
+Set the time range to:
+
+```text
+Last 15 minutes
+```
+
+Check the Loki data source.
+
+Run a broad Explore query:
+
+```logql
+{service=~".+"}
+```
+
+Then narrow the query by environment, host or service.
+
+## Alloy interface is unreachable remotely
+
+This is expected.
+
+Alloy binds to:
+
+```text
+127.0.0.1:12345
+```
+
+Use an SSH tunnel for temporary access:
+
+```bash
+ssh \
+  -L 12345:127.0.0.1:12345 \
+  base@192.168.56.40
+```
