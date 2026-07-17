@@ -7,3 +7,10 @@ alloy_loki_port: 3100
 
 alloy_http_listen_address: 127.0.0.1
 alloy_http_listen_port: 12345
+
+node_exporter_version: "1.12.0"
+
+node_exporter_listen_address: "{{ ansible_host }}"
+node_exporter_port: 9100
+
+node_exporter_prometheus_address: 192.168.56.10
