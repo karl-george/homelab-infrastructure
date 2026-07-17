@@ -100,3 +100,116 @@ Generated runtime state
 ```
 
 Direct server edits create configuration drift and are not part of the normal workflow.
+
+# Centralised Logging Architecture
+
+## Request and logging flow
+
+```mermaid
+flowchart LR
+    C[Desktop client]
+    W1[web01]
+    W2[web02]
+    A1[Alloy on web01]
+    A2[Alloy on web02]
+    L[Loki on automation]
+    G[Grafana on automation]
+
+    C --> W1
+    C --> W2
+
+    W1 --> A1
+    W2 --> A2
+
+    A1 --> L
+    A2 --> L
+
+    G --> L
+    C --> G
+```
+
+## Monitoring host
+
+```text
+automation
+192.168.56.10
+```
+
+Hosted services:
+
+```text
+Grafana → TCP/3000
+Loki    → TCP/3100
+```
+
+Grafana and Loki run as Docker containers managed by Docker Compose.
+
+## Log-agent hosts
+
+```text
+web01 → production
+web02 → staging
+```
+
+Grafana Alloy is installed natively as a systemd service.
+
+## Collected sources
+
+```text
+employee-directory.service journal
+ssh.service journal
+/var/log/nginx/access.log
+/var/log/nginx/error.log
+```
+
+## Standard Loki labels
+
+```text
+environment
+host
+service
+```
+
+Examples:
+
+```text
+environment=production
+host=web01
+service=employee-directory
+```
+
+```text
+environment=staging
+host=web02
+service=nginx-access
+```
+
+## Security boundaries
+
+Grafana is available only from the desktop Host-Only address.
+
+Loki accepts traffic only from approved log-agent addresses.
+
+Alloy’s local web interface binds only to:
+
+```text
+127.0.0.1:12345
+```
+
+No Docker port publishing is used for Grafana or Loki.
+
+## Source of truth
+
+```text
+Git
+ ↓
+Ansible
+ ↓
+Docker Compose and Alloy
+ ↓
+Grafana provisioning
+```
+
+Monitoring configuration and dashboards must be updated through the
+infrastructure repository rather than maintained only through the Grafana
+interface.
