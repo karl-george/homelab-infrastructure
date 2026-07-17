@@ -1,0 +1,65 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+loki.write "central_loki" {
+  endpoint {
+    url = "http://{{ alloy_loki_address }}:{{ alloy_loki_port }}{{ alloy_loki_push_path }}"
+  }
+}
+
+loki.source.journal "employee_directory" {
+  max_age = "{{ alloy_journal_max_age }}"
+
+  matches = "_SYSTEMD_UNIT={{ alloy_employee_service_unit }}"
+
+  labels = {
+    environment = "{{ alloy_environment }}",
+    host        = "{{ alloy_host_name }}",
+    service     = "employee-directory",
+  }
+
+  forward_to = [
+    loki.write.central_loki.receiver,
+  ]
+}
+
+loki.source.journal "ssh" {
+  max_age = "{{ alloy_journal_max_age }}"
+
+  matches = "_SYSTEMD_UNIT={{ alloy_ssh_service_unit }}"
+
+  labels = {
+    environment = "{{ alloy_environment }}",
+    host        = "{{ alloy_host_name }}",
+    service     = "ssh",
+  }
+
+  forward_to = [
+    loki.write.central_loki.receiver,
+  ]
+}
+
+loki.source.file "nginx" {
+  targets = [
+    {
+      __path__   = "{{ alloy_nginx_access_log }}",
+      environment = "{{ alloy_environment }}",
+      host        = "{{ alloy_host_name }}",
+      service     = "nginx-access",
+    },
+    {
+      __path__   = "{{ alloy_nginx_error_log }}",
+      environment = "{{ alloy_environment }}",
+      host        = "{{ alloy_host_name }}",
+      service     = "nginx-error",
+    },
+  ]
+
+  tail_from_end = true
+
+  forward_to = [
+    loki.write.central_loki.receiver,
+  ]
+}

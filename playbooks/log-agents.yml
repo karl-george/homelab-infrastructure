@@ -1,0 +1,8 @@
+---
+- name: Deploy centralised logging agents
+  hosts: log_agents
+  become: true
+
+  roles:
+    - common
+    - alloy

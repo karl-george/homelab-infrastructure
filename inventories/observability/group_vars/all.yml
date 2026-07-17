@@ -1,0 +1,9 @@
+---
+ansible_user: base
+ansible_python_interpreter: /usr/bin/python3
+
+alloy_loki_address: 192.168.56.10
+alloy_loki_port: 3100
+
+alloy_http_listen_address: 127.0.0.1
+alloy_http_listen_port: 12345
