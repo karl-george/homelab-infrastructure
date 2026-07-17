@@ -1,50 +1,35 @@
---- 
 auth_enabled: false
 
 server:
-    http_listen_address: {{ monitoring_bind_address }}
-    http_listen_port: {{ loki_http_port }}
-    grpc_listen_address: 127.0.0.1
-    grpc_listen_port: 9096
+  http_listen_address: "{{ monitoring_bind_address }}"
+  http_listen_port: 3100
+  grpc_listen_address: "{{ monitoring_bind_address }}"
+  grpc_listen_port: 9096
 
 common:
-    path_prefix: /loki
-    replication_factor: 1
+  path_prefix: /loki
 
-    ring: 
-        instance_addr: 127.0.0.1
+  ring:
+    instance_addr: "{{ monitoring_bind_address }}"
+    kvstore:
+      store: inmemory
 
-        kvstore:
-            store: inmemory
-    
-    storage:
-        filesystem:
-            chunks_directory: /loki/chunks
-            rules_directory: /loki/rules
+  replication_factor: 1
+
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+
+frontend:
+  address: "{{ monitoring_bind_address }}"
 
 schema_config:
-    configs:
-        - from: "2024-01-01"
-          store: tsdb
-          object_store: filesystem
-          schema: v13
-
-          index:
-            prefix: index_
-            period: 24h
-
-storage_config:
-    tsdb_shipper:
-        active_index_directory: /loki/index
-        cache_location: /loki/index-cache
-
-compactor: 
-    working_directory: /loki/compactor
-    retention_enabled: true
-    delete_request_store: filesystem
-
-limits_config:
-    retention_period: {{ loki_retention_period }}
-
-analytics:
-    reporting_enabled: false
+  configs:
+    - from: "2024-01-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h

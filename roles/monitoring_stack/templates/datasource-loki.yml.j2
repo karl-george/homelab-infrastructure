@@ -11,7 +11,7 @@ datasources:
     type: loki
     access: proxy
     orgId: 1
-    url: "http://127.0.0.1:{{ loki_http_port }}"
+    url: "http://{{ monitoring_bind_address }}:{{ loki_http_port }}"
     isDefault: true
     editable: false
 

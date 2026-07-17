@@ -131,6 +131,16 @@
     comment: Loki ingestion from monitored host
   loop: "{{ monitoring_log_client_addresses }}"
 
+- name: Allow local Loki queries from monitoring host
+  community.general.ufw:
+    rule: allow
+    direction: in
+    from_ip: "{{ monitoring_bind_address }}"
+    to_ip: "{{ monitoring_bind_address }}"
+    port: "{{ loki_http_port | string }}"
+    proto: tcp
+    comment: Local Loki queries from monitoring host
+
 - name: Validate Docker Compose configuration
   ansible.builtin.command:
     cmd: docker compose config --quiet
