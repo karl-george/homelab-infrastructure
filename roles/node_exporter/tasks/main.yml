@@ -71,7 +71,12 @@
           'node_exporter, version '
           ~ node_exporter_version
         )
-        not in node_exporter_installed_version.stdout
+        not in
+        (
+          node_exporter_installed_version.stdout
+          ~
+          node_exporter_installed_version.stderr
+        )
       }}
 
 - name: Download Node Exporter release archive
