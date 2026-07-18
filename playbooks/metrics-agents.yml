@@ -1,0 +1,8 @@
+---
+- name: Deploy infrastructure metrics agents
+  hosts: log_agents
+  become: true
+
+  roles:
+    - common
+    - node_exporter

@@ -600,3 +600,162 @@ ssh \
   -L 12345:127.0.0.1:12345 \
   base@192.168.56.40
 ```
+
+## Prometheus container does not start
+
+Inspect the container:
+
+```bash
+sudo docker ps -a \
+  --filter name=prometheus
+```
+
+Read its logs:
+
+```bash
+sudo docker logs \
+  --tail 100 \
+  prometheus
+```
+
+Validate the configuration:
+
+```bash
+cd /opt/infrastructure/monitoring
+```
+
+```bash
+sudo docker compose run \
+  --rm \
+  --no-deps \
+  --entrypoint promtool \
+  prometheus \
+  check config \
+  /etc/prometheus/prometheus.yml
+```
+
+## Prometheus target is down
+
+Inspect target state:
+
+```bash
+curl --fail --silent \
+  'http://127.0.0.1:9090/api/v1/targets?state=active' \
+  | python3 -m json.tool
+```
+
+Test the affected exporter directly from automation:
+
+```bash
+curl --fail \
+  http://192.168.56.40:9100/metrics
+```
+
+or:
+
+```bash
+curl --fail \
+  http://192.168.56.50:9100/metrics
+```
+
+Check the service on the target host:
+
+```bash
+sudo systemctl status node_exporter
+```
+
+Check the listener:
+
+```bash
+sudo ss -lntp \
+  'sport = :9100'
+```
+
+Check UFW:
+
+```bash
+sudo ufw status numbered
+```
+
+The rule must allow TCP/9100 from:
+
+```text
+192.168.56.10
+```
+
+## Prometheus is unreachable from the desktop
+
+This is expected.
+
+Prometheus binds only to:
+
+```text
+127.0.0.1:9090
+```
+
+Use an SSH tunnel for temporary browser access:
+
+```bash
+ssh \
+  -L 9090:127.0.0.1:9090 \
+  base@automation
+```
+
+## Grafana Prometheus queries fail
+
+Confirm Prometheus readiness:
+
+```bash
+curl --fail \
+  http://127.0.0.1:9090/-/ready
+```
+
+In Grafana, confirm the provisioned data source has:
+
+```text
+UID: prometheus
+URL: http://127.0.0.1:9090
+```
+
+Because Grafana uses host networking, its loopback network is the
+automation VM's host network.
+
+## Prometheus reports no Node Exporter series
+
+Query:
+
+```promql
+up{job="node-exporter"}
+```
+
+If no results exist, inspect the active-target API.
+
+If the targets are newly configured, wait for at least one scrape interval:
+
+```text
+15 seconds
+```
+
+Then query:
+
+```promql
+node_exporter_build_info
+```
+
+## Prometheus storage grows unexpectedly
+
+Inspect the volume:
+
+```bash
+sudo du -sh \
+  /var/lib/docker/volumes/monitoring_prometheus_data/_data
+```
+
+Confirm the Compose command contains:
+
+```text
+--storage.tsdb.retention.time=15d
+--storage.tsdb.retention.size=5GB
+```
+
+Do not delete files manually from the Prometheus data directory.

@@ -36,5 +36,26 @@ loki_version: "3.7.0"
 loki_http_port: 3100
 loki_retention_period: 168h
 
+prometheus_version: "3.13.1"
+prometheus_directory: >-
+  {{ monitoring_root_directory }}/prometheus
+
+prometheus_http_listen_address: 127.0.0.1
+prometheus_http_port: 9090
+
+prometheus_scrape_interval: 15s
+prometheus_evaluation_interval: 15s
+
+prometheus_retention_time: 15d
+prometheus_retention_size: 5GB
+
+prometheus_targets: []
+
+grafana_prometheus_datasource_name: Prometheus
+grafana_prometheus_datasource_uid: prometheus
+
 monitoring_desktop_address: 127.0.0.1
 monitoring_log_client_addresses: []
+
+grafana_infrastructure_dashboard_title: Infrastructure Metrics
+grafana_infrastructure_dashboard_uid: infrastructure-metrics

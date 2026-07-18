@@ -1,0 +1,237 @@
+---
+- name: Validate Node Exporter configuration
+  ansible.builtin.assert:
+    that:
+      - node_exporter_version is string
+      - node_exporter_version | length > 0
+      - node_exporter_listen_address is string
+      - node_exporter_listen_address | length > 0
+      - node_exporter_listen_address != "0.0.0.0"
+      - node_exporter_listen_address != "::"
+      - node_exporter_port | int > 0
+      - node_exporter_port | int <= 65535
+      - node_exporter_prometheus_address is string
+      - node_exporter_prometheus_address | length > 0
+      - node_exporter_prometheus_address != "0.0.0.0"
+    fail_msg: >-
+      Node Exporter requires a pinned version, a specific non-wildcard
+      listener address, a valid TCP port and a restricted Prometheus
+      source address.
+
+- name: Determine Node Exporter release architecture
+  ansible.builtin.set_fact:
+    node_exporter_release_architecture: >-
+      {{
+        {
+          'x86_64': 'amd64',
+          'aarch64': 'arm64',
+          'armv7l': 'armv7'
+        }.get(ansible_architecture, '')
+      }}
+
+- name: Validate Node Exporter release architecture
+  ansible.builtin.assert:
+    that:
+      - node_exporter_release_architecture | length > 0
+    fail_msg: >-
+      No Node Exporter release architecture mapping exists for
+      {{ ansible_architecture }}.
+
+- name: Create Node Exporter system group
+  ansible.builtin.group:
+    name: "{{ node_exporter_group }}"
+    system: true
+    state: present
+
+- name: Create Node Exporter system user
+  ansible.builtin.user:
+    name: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    state: present
+
+- name: Check installed Node Exporter version
+  ansible.builtin.command:
+    argv:
+      - "{{ node_exporter_binary_path }}"
+      - --version
+  register: node_exporter_installed_version
+  changed_when: false
+  failed_when: false
+
+- name: Determine whether Node Exporter installation is required
+  ansible.builtin.set_fact:
+    node_exporter_install_required: >-
+      {{
+        node_exporter_installed_version.rc != 0
+        or
+        (
+          'node_exporter, version '
+          ~ node_exporter_version
+        )
+        not in
+        (
+          node_exporter_installed_version.stdout
+          ~
+          node_exporter_installed_version.stderr
+        )
+      }}
+
+- name: Download Node Exporter release archive
+  ansible.builtin.get_url:
+    url: "{{ node_exporter_download_url }}"
+    dest: >-
+      {{ node_exporter_download_directory }}/{{
+      node_exporter_archive_name }}
+    checksum: "sha256:{{ node_exporter_checksum_url }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: node_exporter_install_required
+
+- name: Remove previous Node Exporter extraction directory
+  ansible.builtin.file:
+    path: "{{ node_exporter_extract_directory }}"
+    state: absent
+  when: node_exporter_install_required
+
+- name: Extract Node Exporter release archive
+  ansible.builtin.unarchive:
+    src: >-
+      {{ node_exporter_download_directory }}/{{
+      node_exporter_archive_name }}
+    dest: "{{ node_exporter_download_directory }}"
+    remote_src: true
+    owner: root
+    group: root
+  when: node_exporter_install_required
+
+- name: Install Node Exporter binary
+  ansible.builtin.copy:
+    src: "{{ node_exporter_extract_directory }}/node_exporter"
+    dest: "{{ node_exporter_binary_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  when: node_exporter_install_required
+  notify: Restart Node Exporter
+
+- name: Remove Node Exporter release archive
+  ansible.builtin.file:
+    path: >-
+      {{ node_exporter_download_directory }}/{{
+      node_exporter_archive_name }}
+    state: absent
+
+- name: Remove Node Exporter extraction directory
+  ansible.builtin.file:
+    path: "{{ node_exporter_extract_directory }}"
+    state: absent
+
+- name: Deploy Node Exporter systemd service
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: "{{ node_exporter_service_unit_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Node Exporter
+
+- name: Allow Prometheus to access Node Exporter
+  community.general.ufw:
+    rule: allow
+    direction: in
+    from_ip: "{{ node_exporter_prometheus_address }}"
+    to_ip: "{{ node_exporter_listen_address }}"
+    port: "{{ node_exporter_port | string }}"
+    proto: tcp
+    comment: Prometheus Node Exporter scrape
+
+- name: Apply pending Node Exporter changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure Node Exporter is enabled and running
+  ansible.builtin.systemd:
+    name: "{{ node_exporter_service_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for Node Exporter metrics endpoint
+  ansible.builtin.uri:
+    url: >-
+      http://{{ node_exporter_listen_address }}:{{
+      node_exporter_port }}/metrics
+    method: GET
+    status_code: 200
+    return_content: true
+  register: node_exporter_metrics_response
+  retries: 10
+  delay: 2
+  until: node_exporter_metrics_response.status == 200
+
+- name: Confirm Node Exporter build metric exists
+  ansible.builtin.assert:
+    that:
+      - >-
+        'node_exporter_build_info'
+        in node_exporter_metrics_response.content
+    fail_msg: >-
+      The Node Exporter endpoint responded, but its build metric was
+      not present.
+    success_msg: >-
+      Node Exporter is exposing Prometheus metrics.
+
+- name: Inspect Node Exporter socket
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -lnt
+      - sport
+      - "="
+      - ":{{ node_exporter_port }}"
+  register: node_exporter_socket
+  changed_when: false
+
+- name: Confirm Node Exporter uses the restricted listener
+  ansible.builtin.assert:
+    that:
+      - >-
+        node_exporter_listen_address
+        in node_exporter_socket.stdout
+      - >-
+        '0.0.0.0:' ~ (node_exporter_port | string)
+        not in node_exporter_socket.stdout
+      - >-
+        '[::]:' ~ (node_exporter_port | string)
+        not in node_exporter_socket.stdout
+    fail_msg: >-
+      Node Exporter is not restricted to the configured Host-Only
+      address.
+    success_msg: >-
+      Node Exporter is listening only on the configured address.
+
+- name: Read Node Exporter service information
+  ansible.builtin.systemd:
+    name: "{{ node_exporter_service_name }}"
+  register: node_exporter_service_information
+
+- name: Confirm Node Exporter service state
+  ansible.builtin.assert:
+    that:
+      - >-
+        node_exporter_service_information.status.ActiveState
+        == "active"
+      - >-
+        node_exporter_service_information.status.SubState
+        == "running"
+      - >-
+        node_exporter_service_information.status.UnitFileState
+        == "enabled"
+    fail_msg: >-
+      Node Exporter is not active, running and enabled.
+    success_msg: >-
+      Node Exporter is active, running and enabled.
