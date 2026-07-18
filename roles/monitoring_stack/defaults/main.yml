@@ -56,3 +56,6 @@ grafana_prometheus_datasource_uid: prometheus
 
 monitoring_desktop_address: 127.0.0.1
 monitoring_log_client_addresses: []
+
+grafana_infrastructure_dashboard_title: Infrastructure Metrics
+grafana_infrastructure_dashboard_uid: infrastructure-metrics

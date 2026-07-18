@@ -22,6 +22,10 @@
       - grafana_prometheus_datasource_uid is string
       - grafana_prometheus_datasource_uid | length > 0
       - grafana_prometheus_datasource_uid != grafana_loki_datasource_uid
+      - grafana_infrastructure_dashboard_uid is string
+      - grafana_infrastructure_dashboard_uid | length > 0
+      - grafana_infrastructure_dashboard_title is string
+      - grafana_infrastructure_dashboard_title | length > 0
     fail_msg: >-
       The monitoring stack requires a valid bind address, desktop address,
       log-client addresses and encrypted Grafana administrator password.
@@ -148,6 +152,16 @@
     mode: "0644"
   notify: Restart monitoring stack
 
+- name: Deploy infrastructure metrics dashboard
+  ansible.builtin.template:
+    src: infrastructure-metrics.json.j2
+    dest: >-
+      {{ monitoring_grafana_dashboard_directory }}/infrastructure-metrics.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring stack
+
 - name: Validate centralised-logging dashboard JSON
   ansible.builtin.command:
     argv:
@@ -156,6 +170,16 @@
       - json.tool
       - >-
         {{ monitoring_grafana_dashboard_directory }}/centralised-logs.json
+  changed_when: false
+
+- name: Validate infrastructure dashboard JSON
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - json.tool
+      - "{{ monitoring_grafana_dashboard_directory }}/infrastructure-metrics.json"
+  register: infrastructure_dashboard_validation
   changed_when: false
 
 - name: Deploy monitoring Docker Compose file
