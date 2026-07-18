@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The `monitoring_stack` role deploys Grafana and Loki on the automation VM
+The `monitoring_stack` role deploys Grafana, Loki and Prometheus on the automation VM
 using Docker Compose.
 
 Grafana configuration, data sources and dashboards are provisioned from
@@ -105,3 +105,79 @@ The role automatically verifies:
 - Grafana health;
 - provisioned Loki data source;
 - provisioned logging dashboard.
+
+### Prometheus
+
+```text
+127.0.0.1:9090
+```
+
+Prometheus stores infrastructure metrics scraped from Node Exporter.
+
+Prometheus is an internal Grafana backend and does not listen on the
+Host-Only address.
+
+Current scrape targets:
+
+```text
+web01 → 192.168.56.40:9100
+web02 → 192.168.56.50:9100
+```
+
+Prometheus also scrapes itself.
+
+## Prometheus storage
+
+Persistent volume:
+
+```text
+monitoring_prometheus_data
+```
+
+Container path:
+
+```text
+/prometheus
+```
+
+Retention policy:
+
+```text
+Time: 15d
+Size: 5GB
+```
+
+The first retention boundary reached removes older data.
+
+## Provisioned Prometheus data source
+
+```text
+Name: Prometheus
+UID: prometheus
+Default: false
+URL: http://127.0.0.1:9090
+```
+
+Loki remains the default Grafana data source.
+
+## Prometheus security
+
+- Prometheus binds only to `127.0.0.1`.
+- No Docker port is published.
+- No inbound UFW rule is created for TCP/9090.
+- Grafana reaches Prometheus through host networking.
+- Temporary browser access requires an SSH tunnel.
+
+## Prometheus validation
+
+The role automatically verifies:
+
+- configuration syntax with `promtool`;
+- server readiness;
+- server health;
+- expected active-target count;
+- health of every scrape target;
+- production and staging labels;
+- `up` metrics for both Node Exporter targets;
+- stored Node Exporter build information;
+- Grafana data-source provisioning.
