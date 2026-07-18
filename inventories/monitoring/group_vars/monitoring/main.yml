@@ -22,3 +22,28 @@ loki_http_port: 3100
 loki_retention_period: 168h
 
 monitoring_root_directory: /opt/infrastructure/monitoring
+
+prometheus_version: "3.13.1"
+
+prometheus_http_listen_address: 127.0.0.1
+prometheus_http_port: 9090
+
+prometheus_scrape_interval: 15s
+prometheus_evaluation_interval: 15s
+
+prometheus_retention_time: 15d
+prometheus_retention_size: 5GB
+
+prometheus_targets:
+  - name: web01
+    address: 192.168.56.40
+    port: 9100
+    environment: production
+
+  - name: web02
+    address: 192.168.56.50
+    port: 9100
+    environment: staging
+
+grafana_prometheus_datasource_name: Prometheus
+grafana_prometheus_datasource_uid: prometheus

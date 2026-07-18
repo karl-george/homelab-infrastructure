@@ -21,6 +21,39 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  prometheus:
+    image: "prom/prometheus:v{{ prometheus_version }}"
+    container_name: prometheus
+
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - >-
+        --storage.tsdb.retention.time={{
+        prometheus_retention_time }}
+      - >-
+        --storage.tsdb.retention.size={{
+        prometheus_retention_size }}
+      - >-
+        --web.listen-address={{
+        prometheus_http_listen_address }}:{{
+        prometheus_http_port }}
+
+    network_mode: host
+    restart: unless-stopped
+
+    volumes:
+      - >-
+        ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - "prometheus_data:/prometheus"
+
+    logging:
+      driver: json-file
+
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   grafana:
     image: "grafana/grafana:{{ grafana_version }}"
     container_name: grafana
@@ -30,6 +63,7 @@ services:
 
     depends_on:
       - loki
+      - prometheus
 
     volumes:
       - "grafana_data:/var/lib/grafana"
@@ -55,5 +89,8 @@ volumes:
   loki_data:
     name: monitoring_loki_data
 
+  prometheus_data:
+    name: monitoring_prometheus_data
+    
   grafana_data:
     name: monitoring_grafana_data

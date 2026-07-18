@@ -1,0 +1,30 @@
+---
+global:
+  scrape_interval: "{{ prometheus_scrape_interval }}"
+  evaluation_interval: "{{ prometheus_evaluation_interval }}"
+
+scrape_configs:
+  - job_name: prometheus
+
+    static_configs:
+      - targets:
+          - "127.0.0.1:{{ prometheus_http_port }}"
+
+        labels:
+          environment: monitoring
+          host: "{{ monitoring_host_name }}"
+          service: prometheus
+
+  - job_name: node-exporter
+
+    static_configs:
+{% for target in prometheus_targets %}
+      - targets:
+          - "{{ target.address }}:{{ target.port }}"
+
+        labels:
+          environment: "{{ target.environment }}"
+          host: "{{ target.name }}"
+          service: node-exporter
+
+{% endfor %}

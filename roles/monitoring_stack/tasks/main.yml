@@ -9,10 +9,45 @@
       - grafana_admin_password != "admin"
       - monitoring_desktop_address is string
       - monitoring_log_client_addresses | length > 0
+      - prometheus_version is string
+      - prometheus_version | length > 0
+      - prometheus_http_listen_address == "127.0.0.1"
+      - prometheus_http_port | int > 0
+      - prometheus_http_port | int <= 65535
+      - prometheus_scrape_interval is string
+      - prometheus_evaluation_interval is string
+      - prometheus_retention_time is string
+      - prometheus_retention_size is string
+      - prometheus_targets | length > 0
+      - grafana_prometheus_datasource_uid is string
+      - grafana_prometheus_datasource_uid | length > 0
+      - grafana_prometheus_datasource_uid != grafana_loki_datasource_uid
     fail_msg: >-
       The monitoring stack requires a valid bind address, desktop address,
       log-client addresses and encrypted Grafana administrator password.
   no_log: true
+
+- name: Validate Prometheus targets
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name is string
+      - item.name | length > 0
+      - item.address is defined
+      - item.address is string
+      - item.address | length > 0
+      - item.address != "0.0.0.0"
+      - item.port is defined
+      - item.port | int > 0
+      - item.port | int <= 65535
+      - item.environment is defined
+      - item.environment in ["production", "staging"]
+    fail_msg: >-
+      Every Prometheus target requires a name, a specific address,
+      a valid TCP port and an approved environment.
+  loop: "{{ prometheus_targets }}"
+  loop_control:
+    label: "{{ item.name | default('unnamed target') }}"
 
 - name: Ensure monitoring directory structure exists
   ansible.builtin.file:
@@ -43,10 +78,22 @@
     - path: "{{ monitoring_grafana_dashboard_provisioning_directory }}"
       mode: "0755"
 
+    - path: "{{ prometheus_directory }}"
+      mode: "0755"
+
 - name: Deploy Loki configuration
   ansible.builtin.template:
     src: loki.yml.j2
     dest: "{{ monitoring_loki_directory }}/loki.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring stack
+
+- name: Deploy Prometheus configuration
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ prometheus_directory }}/prometheus.yml"
     owner: root
     group: root
     mode: "0644"
@@ -66,6 +113,16 @@
     src: datasource-loki.yml.j2
     dest: >-
       {{ monitoring_grafana_datasource_provisioning_directory }}/loki.yml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring stack
+
+- name: Deploy Prometheus data-source provisioning
+  ansible.builtin.template:
+    src: datasource-prometheus.yml.j2
+    dest: >-
+      {{ monitoring_grafana_datasource_provisioning_directory }}/prometheus.yml
     owner: root
     group: root
     mode: "0644"
@@ -159,20 +216,83 @@
     'Pull complete'
     in monitoring_compose_pull.stdout
 
+- name: Validate Prometheus configuration
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - run
+      - --rm
+      - --no-deps
+      - --entrypoint
+      - promtool
+      - prometheus
+      - check
+      - config
+      - /etc/prometheus/prometheus.yml
+    chdir: "{{ monitoring_root_directory }}"
+  register: monitoring_prometheus_config_validation
+  changed_when: false
+
+- name: Confirm Prometheus configuration validation
+  ansible.builtin.assert:
+    that:
+      - monitoring_prometheus_config_validation.rc == 0
+      - >-
+        'SUCCESS'
+        in
+        (
+          monitoring_prometheus_config_validation.stdout
+          ~
+          monitoring_prometheus_config_validation.stderr
+        )
+    fail_msg: >-
+      Prometheus configuration did not pass promtool validation.
+    success_msg: >-
+      Prometheus configuration passed promtool validation.
+
 - name: Start monitoring stack
   ansible.builtin.command:
-    cmd: docker compose up -d
+    argv:
+      - docker
+      - compose
+      - up
+      - -d
     chdir: "{{ monitoring_root_directory }}"
   register: monitoring_compose_up
   changed_when: >-
-    'Started'
-    in monitoring_compose_up.stderr
+    (
+      'Started'
+      in
+      (
+        monitoring_compose_up.stdout
+        ~
+        monitoring_compose_up.stderr
+      )
+    )
     or
-    'Created'
-    in monitoring_compose_up.stderr
+    (
+      'Created'
+      in
+      (
+        monitoring_compose_up.stdout
+        ~
+        monitoring_compose_up.stderr
+      )
+    )
     or
-    'Recreated'
-    in monitoring_compose_up.stderr
+    (
+      'Recreated'
+      in
+      (
+        monitoring_compose_up.stdout
+        ~
+        monitoring_compose_up.stderr
+      )
+    )
+
+- name: Apply pending monitoring-stack changes
+  ansible.builtin.meta: flush_handlers
 
 - name: Wait for Loki readiness
   ansible.builtin.uri:
@@ -187,6 +307,226 @@
   delay: 2
   until: monitoring_loki_readiness.status == 200
 
+- name: Wait for Prometheus readiness
+  ansible.builtin.uri:
+    url: >-
+      http://{{ prometheus_http_listen_address }}:{{
+      prometheus_http_port }}/-/ready
+    method: GET
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_readiness
+  retries: 15
+  delay: 2
+  until: monitoring_prometheus_readiness.status == 200
+
+- name: Verify Prometheus health
+  ansible.builtin.uri:
+    url: >-
+      http://{{ prometheus_http_listen_address }}:{{
+      prometheus_http_port }}/-/healthy
+    method: GET
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_health
+
+- name: Read active Prometheus targets
+  ansible.builtin.uri:
+    url: >-
+      http://{{ prometheus_http_listen_address }}:{{
+      prometheus_http_port }}/api/v1/targets?state=active
+    method: GET
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_active_targets
+
+- name: Confirm Prometheus API response
+  ansible.builtin.assert:
+    that:
+      - monitoring_prometheus_active_targets.json.status == "success"
+      - >-
+        monitoring_prometheus_active_targets.json.data.activeTargets
+        | length
+        ==
+        (
+          prometheus_targets
+          | length
+        )
+        + 1
+    fail_msg: >-
+      Prometheus did not return the expected number of active scrape
+      targets.
+    success_msg: >-
+      Prometheus returned all configured active scrape targets.
+
+- name: Identify unhealthy Prometheus targets
+  ansible.builtin.set_fact:
+    monitoring_prometheus_unhealthy_targets: >-
+      {{
+        monitoring_prometheus_active_targets.json.data.activeTargets
+        | rejectattr('health', 'equalto', 'up')
+        | list
+      }}
+
+- name: Confirm every Prometheus target is healthy
+  ansible.builtin.assert:
+    that:
+      - monitoring_prometheus_unhealthy_targets | length == 0
+    fail_msg: >-
+      One or more Prometheus scrape targets are unhealthy:
+      {{
+        monitoring_prometheus_unhealthy_targets
+        | map(attribute='scrapeUrl')
+        | list
+      }}
+    success_msg: >-
+      Every Prometheus scrape target is healthy.
+
+- name: Extract Node Exporter target labels
+  ansible.builtin.set_fact:
+    monitoring_prometheus_node_target_labels: >-
+      {{
+        monitoring_prometheus_active_targets.json.data.activeTargets
+        | selectattr(
+            'labels.job',
+            'defined'
+          )
+        | selectattr(
+            'labels.job',
+            'equalto',
+            'node-exporter'
+          )
+        | map(attribute='labels')
+        | list
+      }}
+
+- name: Confirm Node Exporter target count
+  ansible.builtin.assert:
+    that:
+      - >-
+        monitoring_prometheus_node_target_labels
+        | length
+        ==
+        prometheus_targets
+        | length
+    fail_msg: >-
+      Prometheus did not expose the expected Node Exporter target labels.
+
+- name: Confirm expected Node Exporter host labels
+  ansible.builtin.assert:
+    that:
+      - >-
+        item.name
+        in
+        (
+          monitoring_prometheus_node_target_labels
+          | map(attribute='host')
+          | list
+        )
+      - >-
+        item.environment
+        in
+        (
+          monitoring_prometheus_node_target_labels
+          | selectattr('host', 'equalto', item.name)
+          | map(attribute='environment')
+          | list
+        )
+    fail_msg: >-
+      Prometheus did not attach the expected labels for {{ item.name }}.
+    success_msg: >-
+      Prometheus attached the expected labels for {{ item.name }}.
+  loop: "{{ prometheus_targets }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Query Node Exporter up metrics
+  ansible.builtin.uri:
+    url: >-
+      http://{{ prometheus_http_listen_address }}:{{
+      prometheus_http_port }}/api/v1/query?query={{
+      'up{job="node-exporter"}'
+      | urlencode
+      }}
+    method: GET
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_node_up_query
+  retries: 5
+  delay: 5
+  until: >-
+    monitoring_prometheus_node_up_query.json.status == "success"
+    and
+    (
+      monitoring_prometheus_node_up_query.json.data.result
+      | length
+    )
+    ==
+    (
+      prometheus_targets
+      | length
+    )
+
+- name: Confirm all Node Exporter up metrics equal one
+  ansible.builtin.assert:
+    that:
+      - >-
+        monitoring_prometheus_node_up_query.json.data.result
+        | map(attribute='value')
+        | map('last')
+        | map('float')
+        | select('equalto', 1.0)
+        | list
+        | length
+        ==
+        prometheus_targets
+        | length
+    fail_msg: >-
+      One or more Node Exporter up metrics did not equal one.
+    success_msg: >-
+      Prometheus stored healthy up metrics for every Node Exporter target.
+
+- name: Query Node Exporter build information
+  ansible.builtin.uri:
+    url: >-
+      http://{{ prometheus_http_listen_address }}:{{
+      prometheus_http_port }}/api/v1/query?query={{
+      'node_exporter_build_info'
+      | urlencode
+      }}
+    method: GET
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_node_build_query
+  retries: 5
+  delay: 5
+  until: >-
+    monitoring_prometheus_node_build_query.json.status == "success"
+    and
+    (
+      monitoring_prometheus_node_build_query.json.data.result
+      | length
+    )
+    >=
+    (
+      prometheus_targets
+      | length
+    )
+
+- name: Confirm Node Exporter metrics are stored
+  ansible.builtin.assert:
+    that:
+      - >-
+        monitoring_prometheus_node_build_query.json.data.result
+        | length
+        >=
+        prometheus_targets
+        | length
+    fail_msg: >-
+      Prometheus did not store Node Exporter build information.
+    success_msg: >-
+      Prometheus stored Node Exporter infrastructure metrics.
+
 - name: Wait for Grafana
   ansible.builtin.uri:
     url: >-
@@ -200,8 +540,31 @@
   delay: 2
   until: monitoring_grafana_health.status == 200
 
-- name: Apply pending monitoring-stack changes
-  ansible.builtin.meta: flush_handlers
+- name: Wait for Loki after monitoring-stack changes
+  ansible.builtin.uri:
+    url: >-
+      http://{{ monitoring_bind_address }}:{{
+      loki_http_port }}/ready
+    method: GET
+    status_code: 200
+    return_content: true
+  register: monitoring_loki_restarted_readiness
+  retries: 15
+  delay: 2
+  until: monitoring_loki_restarted_readiness.status == 200
+
+- name: Wait for Prometheus after monitoring-stack changes
+  ansible.builtin.uri:
+    url: >-
+      http://{{ prometheus_http_listen_address }}:{{
+      prometheus_http_port }}/-/ready
+    method: GET
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_restarted_readiness
+  retries: 15
+  delay: 2
+  until: monitoring_prometheus_restarted_readiness.status == 200
 
 - name: Wait for Grafana after provisioning changes
   ansible.builtin.uri:
@@ -245,6 +608,21 @@
   register: monitoring_grafana_loki_datasource
   no_log: true
 
+- name: Verify provisioned Prometheus data source
+  ansible.builtin.uri:
+    url: >-
+      http://{{ monitoring_bind_address }}:{{
+      grafana_http_port }}/api/datasources/uid/{{
+      grafana_prometheus_datasource_uid }}
+    method: GET
+    url_username: "{{ grafana_admin_user }}"
+    url_password: "{{ grafana_admin_password }}"
+    force_basic_auth: true
+    status_code: 200
+    return_content: true
+  register: monitoring_grafana_prometheus_datasource
+  no_log: true
+
 - name: Confirm Loki data-source identity
   ansible.builtin.assert:
     that:
@@ -256,6 +634,41 @@
       Grafana did not provision Loki as the expected default data source.
     success_msg: >-
       Grafana provisioned Loki as the default data source.
+
+- name: Confirm Prometheus data-source identity
+  ansible.builtin.assert:
+    that:
+      - >-
+        monitoring_grafana_prometheus_datasource.json.uid
+        ==
+        grafana_prometheus_datasource_uid
+      - >-
+        monitoring_grafana_prometheus_datasource.json.type
+        ==
+        "prometheus"
+      - >-
+        not
+        (
+          monitoring_grafana_prometheus_datasource.json.isDefault
+          | bool
+        )
+      - >-
+        monitoring_grafana_prometheus_datasource.json.url
+        ==
+        (
+          'http://'
+          ~ prometheus_http_listen_address
+          ~ ':'
+          ~
+          (
+            prometheus_http_port
+            | string
+          )
+        )
+    fail_msg: >-
+      Grafana did not provision the expected Prometheus data source.
+    success_msg: >-
+      Grafana provisioned the expected Prometheus data source.
 
 - name: Search for provisioned logging dashboard
   ansible.builtin.uri:
