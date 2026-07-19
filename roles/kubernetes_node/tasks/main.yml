@@ -1,0 +1,82 @@
+---
+- name: Validate Kubernetes node variables
+  ansible.builtin.assert:
+    that:
+      - kubernetes_version_minor is string
+      - kubernetes_version_minor | length > 0
+      - (kubernetes_api_address | ansible.utils.ipaddr) is not false
+      - kubernetes_api_port | int > 0
+      - kubernetes_api_port | int <= 65535
+      - (kubernetes_pod_network_cidr | ansible.utils.ipaddr) is not false
+      - kubernetes_required_packages | length > 0
+      - kubernetes_kernel_modules | length > 0
+    fail_msg: >-
+      Kubernetes node configuration contains invalid values.
+    success_msg: >-
+      Kubernetes node configuration contains valid values.
+
+- name: Update APT package cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install Kubernetes node prerequisites
+  ansible.builtin.apt:
+    name: "{{ kubernetes_required_packages }}"
+    state: present
+
+- name: Check active swap
+  ansible.builtin.command:
+    argv:
+      - swapon
+      - --show
+      - --noheadings
+  register: kubernetes_active_swap
+  changed_when: false
+
+- name: Disable active swap
+  ansible.builtin.command:
+    argv:
+      - swapoff
+      - --all
+  when: kubernetes_active_swap.stdout | trim | length > 0
+  changed_when: true
+
+- name: Disable swap entries in fstab
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\s*[^#\n]+\s+\S+\s+swap\s+\S+.*)$'
+    replace: '# \1'
+    backup: true
+
+- name: Configure Kubernetes kernel modules
+  ansible.builtin.template:
+    src: kubernetes-modules.conf.j2
+    dest: /etc/modules-load.d/kubernetes.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Load Kubernetes kernel modules
+  ansible.builtin.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ kubernetes_kernel_modules }}"
+
+- name: Configure Kubernetes sysctl settings
+  ansible.builtin.template:
+    src: kubernetes-sysctl.conf.j2
+    dest: /etc/sysctl.d/99-kubernetes.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Kubernetes sysctl settings
+
+- name: Allow Kubernetes API from Host-Only network
+  community.general.ufw:
+    rule: allow
+    direction: in
+    proto: tcp
+    src: 192.168.56.0/24
+    to_port: "{{ kubernetes_api_port }}"
+    comment: Kubernetes API from Host-Only network

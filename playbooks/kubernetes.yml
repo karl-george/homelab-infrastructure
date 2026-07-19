@@ -1,0 +1,8 @@
+---
+- name: Prepare Kubernetes cluster nodes
+  hosts: kubernetes_cluster
+  become: true
+
+  roles:
+    - common
+    - kubernetes_node
