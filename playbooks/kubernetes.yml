@@ -6,3 +6,10 @@
   roles:
     - common
     - kubernetes_node
+
+- name: Initialise Kubernetes control-plane
+  hosts: kubernetes_control_plane
+  become: true
+
+  roles:
+    - kubernetes_control_plane

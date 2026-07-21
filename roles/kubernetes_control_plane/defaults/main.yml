@@ -1,0 +1,27 @@
+---
+# Cluster identity
+kubernetes_cluster_name: homelab
+kubernetes_control_plane_address: 192.168.56.20
+kubernetes_control_plane_port: 6443
+
+# Cluster Networking
+kubernetes_pod_network_cidr: 10.244.0.0/16
+kubernetes_service_network_cidr: 10.96.0.0/16
+kubernetes_dns_domain: cluster.local
+
+# Container Runtime
+kubernetes_cri_socket: unix:///run/containerd/containerd.sock
+
+# kubeadm
+kubernetes_kubeadm_config_path: /etc/kubernetes/kubeadm-init.yaml
+kubernetes_admin_config_path: /etc/kubernetes/admin.conf
+
+# Local Administrator
+kubernetes_admin_user: base
+kubernetes_admin_group: base
+kubernetes_admin_home: /home/base
+kubernetes_user_kubeconfig_path: /home/base/.kube/config
+
+# Firewall
+kubernetes_api_allowed_network: 192.168.56.0/24
+kubernetes_kubelet_port: 10250
