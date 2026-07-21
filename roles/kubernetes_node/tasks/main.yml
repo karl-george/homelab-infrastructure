@@ -321,3 +321,20 @@
     owner: root
     group: root
     mode: "0755"
+
+- name: Allow Pod network to access Kubernetes API
+  community.general.ufw:
+    rule: allow
+    direction: in
+    from_ip: "{{ kubernetes_pod_network_cidr }}"
+    to_ip: "{{ kubernetes_api_address }}"
+    to_port: "6443"
+    proto: tcp
+    comment: Kubernetes API from Pod network
+
+- name: Allow routed traffic from Kubernetes Pod network
+  community.general.ufw:
+    rule: allow
+    route: true
+    from_ip: "{{ kubernetes_pod_network_cidr }}"
+    comment: Kubernetes Pod forwarding
