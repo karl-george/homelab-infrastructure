@@ -25,6 +25,73 @@
     name: "{{ kubernetes_required_packages }}"
     state: present
 
+- name: Read installed containerd version
+  ansible.builtin.command:
+    argv:
+      - containerd
+      - --version
+  register: containerd_version_command
+  changed_when: false
+
+- name: Extract containerd semantic version
+  ansible.builtin.set_fact:
+    containerd_installed_version: >-
+      {{
+        containerd_version_command.stdout
+        | regex_search('[0-9]+\.[0-9]+\.[0-9]+')
+      }}
+
+- name: Extract containerd major version
+  ansible.builtin.set_fact:
+    containerd_major_version: >-
+      {{
+        containerd_installed_version.split('.')[0]
+      }}
+
+- name: Validate detected containerd version
+  ansible.builtin.assert:
+    that:
+      - containerd_installed_version is defined
+      - containerd_installed_version | length > 0
+      - containerd_major_version in containerd_supported_major_versions
+    fail_msg: >-
+      Installed containerd version is not supported.
+    success_msg: >-
+      Installed containerd version is supported.
+
+- name: Ensure containerd configuration directory exists
+  ansible.builtin.file:
+    path: "{{ containerd_config_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy Kubernetes containerd configuration
+  ansible.builtin.template:
+    src: containerd-config.toml.j2
+    dest: "{{ containerd_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: Restart containerd
+
+- name: Apply containerd configuration before validation
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure containerd is enabled and running
+  ansible.builtin.systemd_service:
+    name: "{{ containerd_service_name }}"
+    state: started
+    enabled: true
+
+- name: Wait for containerd socket
+  ansible.builtin.wait_for:
+    path: "{{ containerd_socket_path }}"
+    state: present
+    timeout: 30
+
 - name: Check active swap
   ansible.builtin.command:
     argv:

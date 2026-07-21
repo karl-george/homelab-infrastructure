@@ -1,0 +1,53 @@
+{% if containerd_major_version == "1" %}
+version = 2
+
+disabled_plugins = []
+
+[grpc]
+  address = "{{ containerd_socket_path }}"
+
+[plugins]
+
+  [plugins."io.containerd.grpc.v1.cri"]
+
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      default_runtime_name = "{{ containerd_default_runtime_name }}"
+      snapshotter = "{{ containerd_snapshotter }}"
+
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+          runtime_type = "{{ containerd_runtime_type }}"
+
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+            SystemdCgroup = {{ containerd_systemd_cgroup | bool | lower }}
+
+{% elif containerd_major_version == "2" %}
+version = 3
+
+disabled_plugins = []
+
+[grpc]
+  address = "{{ containerd_socket_path }}"
+
+[plugins]
+
+  [plugins."io.containerd.cri.v1.images"]
+    snapshotter = "{{ containerd_snapshotter }}"
+
+  [plugins."io.containerd.cri.v1.runtime"]
+
+    [plugins."io.containerd.cri.v1.runtime".containerd]
+      default_runtime_name = "{{ containerd_default_runtime_name }}"
+
+      [plugins."io.containerd.cri.v1.runtime".containerd.runtimes]
+
+        [plugins."io.containerd.cri.v1.runtime".containerd.runtimes.runc]
+          runtime_type = "{{ containerd_runtime_type }}"
+
+          [plugins."io.containerd.cri.v1.runtime".containerd.runtimes.runc.options]
+            SystemdCgroup = {{ containerd_systemd_cgroup | bool | lower }}
+
+{% else %}
+{{ 'Unsupported containerd major version: ' ~ containerd_major_version }}
+{% endif %}
