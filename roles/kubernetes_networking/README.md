@@ -1,38 +1,150 @@
-Role Name
-=========
+# Kubernetes Networking Role
 
-A brief description of the role goes here.
+## Purpose
 
-Requirements
-------------
+The `kubernetes_networking` role installs the Kubernetes Container Network
+Interface (CNI) plugin.
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+Without a CNI plugin Kubernetes cannot schedule workloads successfully.
 
-Role Variables
---------------
+This app uses **Flannel** as the cluster networking solution.
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+---
 
-Dependencies
-------------
+# Responsibilities
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+The role is responsible for:
 
-Example Playbook
-----------------
+- Downloading the Flannel manifest
+- Deploying Flannel
+- Waiting for the DaemonSet rollout
+- Waiting for the node to become Ready
+- Waiting for CoreDNS
+- Verifying cluster networking
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+The role is **not** responsible for:
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+- Initialising Kubernetes
+- Installing Kubernetes packages
+- Deploying applications
 
-License
--------
+---
 
-BSD
+# Role Structure
 
-Author Information
-------------------
+```
+roles/
+└── kubernetes_networking/
+    ├── defaults/
+    │   └── main.yml
+    ├── tasks/
+    │   └── main.yml
+    └── README.md
+```
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+---
+
+# Variables
+
+| Variable                | Description               |
+| ----------------------- | ------------------------- |
+| flannel_manifest_url    | Official Flannel manifest |
+| flannel_manifest_path   | Local manifest location   |
+| flannel_namespace       | Flannel namespace         |
+| kubernetes_admin_config | admin.conf location       |
+| flannel_rollout_timeout | DaemonSet rollout timeout |
+| node_ready_timeout      | Node readiness timeout    |
+| coredns_rollout_timeout | CoreDNS rollout timeout   |
+
+---
+
+# Workflow
+
+The role performs the following sequence:
+
+1. Download Flannel manifest
+2. Apply manifest
+3. Verify namespace creation
+4. Wait for DaemonSet rollout
+5. Wait for node readiness
+6. Wait for CoreDNS rollout
+7. Display cluster status
+
+---
+
+# Validation
+
+The role validates that:
+
+- Flannel DaemonSet is Available
+- Kubernetes node is Ready
+- CoreDNS is Running
+- kube-system Pods are healthy
+
+---
+
+# Expected Result
+
+```
+kubectl get nodes
+```
+
+returns:
+
+```
+NAME      STATUS
+k8s-lab   Ready
+```
+
+---
+
+```
+kubectl get pods -n kube-system
+```
+
+returns:
+
+```
+coredns                     Running
+etcd                        Running
+kube-apiserver              Running
+kube-controller-manager     Running
+kube-scheduler              Running
+kube-proxy                  Running
+```
+
+---
+
+# Dependencies
+
+This role requires:
+
+- kubernetes_node
+- kubernetes_control_plane
+
+to have completed successfully.
+
+---
+
+# Networking
+
+Current network configuration:
+
+| Setting      | Value         |
+| ------------ | ------------- |
+| CNI          | Flannel       |
+| Pod CIDR     | 10.244.0.0/16 |
+| Service CIDR | 10.96.0.0/16  |
+| Runtime      | containerd    |
+
+---
+
+# Future Enhancements
+
+Possible future improvements:
+
+- Replace Flannel with Cilium
+- Support Calico
+- Dual-stack IPv4/IPv6
+- Network policies
+- Multi-node overlay networking

@@ -1,38 +1,158 @@
-Role Name
-=========
+# Kubernetes Control Plane Role
 
-A brief description of the role goes here.
+## Purpose
 
-Requirements
-------------
+The `kubernetes_control_plane` role bootstraps a Kubernetes control plane using
+`kubeadm`.
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+Unlike the `kubernetes_node` role, which prepares any machine to become a
+Kubernetes node, this role is only executed on control-plane nodes.
 
-Role Variables
---------------
+The role is designed to be idempotent. Once the cluster has been initialised,
+subsequent Ansible runs will not recreate the cluster or regenerate certificates.
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+---
 
-Dependencies
-------------
+# Responsibilities
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+This role is responsible for:
 
-Example Playbook
-----------------
+- Validating control-plane configuration
+- Deploying the kubeadm configuration
+- Configuring the Kubernetes API endpoint
+- Pulling Kubernetes control-plane images
+- Initialising the cluster using kubeadm
+- Waiting for the API server
+- Configuring kubectl for the local administrator
+- Performing initial cluster validation
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+It is **not** responsible for:
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+- Installing Kubernetes packages
+- Installing containerd
+- Configuring the operating system
+- Installing the cluster network plugin
+- Deploying workloads
 
-License
--------
+Those responsibilities belong to other roles.
 
-BSD
+---
 
-Author Information
-------------------
+# Role Structure
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+```
+roles/
+└── kubernetes_control_plane/
+    ├── defaults/
+    │   └── main.yml
+    ├── tasks/
+    │   └── main.yml
+    ├── templates/
+    │   └── kubeadm-init.yaml.j2
+    └── README.md
+```
+
+---
+
+# Variables
+
+| Variable                         | Description                    |
+| -------------------------------- | ------------------------------ |
+| kubernetes_cluster_name          | Kubernetes cluster name        |
+| kubernetes_control_plane_address | API server address             |
+| kubernetes_control_plane_port    | API server port                |
+| kubernetes_pod_network_cidr      | Pod network                    |
+| kubernetes_service_network_cidr  | Service network                |
+| kubernetes_dns_domain            | Cluster DNS domain             |
+| kubernetes_cri_socket            | containerd CRI socket          |
+| kubernetes_kubeadm_config_path   | kubeadm configuration          |
+| kubernetes_admin_config_path     | admin.conf location            |
+| kubernetes_admin_user            | Local Kubernetes administrator |
+
+---
+
+# Templates
+
+## kubeadm-init.yaml.j2
+
+Generates the kubeadm configuration used by:
+
+```
+kubeadm init
+```
+
+The template contains:
+
+- InitConfiguration
+- ClusterConfiguration
+- KubeletConfiguration
+
+---
+
+# Idempotence
+
+The role checks for:
+
+```
+/etc/kubernetes/admin.conf
+```
+
+If the file exists, cluster initialisation is skipped.
+
+This prevents accidental recreation of the control plane.
+
+---
+
+# Validation
+
+The role performs functional validation by:
+
+- Validating the kubeadm configuration
+- Waiting for the API server
+- Verifying administrator kubeconfig creation
+- Querying Kubernetes nodes using kubectl
+
+---
+
+# Expected Result
+
+After successful execution:
+
+```
+kubectl get nodes
+```
+
+returns:
+
+```
+NAME      STATUS
+k8s-lab   NotReady
+```
+
+This is expected because the CNI plugin has not yet been installed.
+
+---
+
+# Dependencies
+
+This role requires:
+
+- kubernetes_node
+- containerd
+- kubeadm
+- kubelet
+- kubectl
+
+to have already been installed.
+
+---
+
+# Future Enhancements
+
+Possible future improvements include:
+
+- High Availability control planes
+- External etcd support
+- Certificate rotation
+- Automatic kubeadm upgrades
+- Multi-control-plane clusters
