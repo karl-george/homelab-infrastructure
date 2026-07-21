@@ -245,6 +245,11 @@
   register: crictl_info
   changed_when: false
 
+- name: Remove downloaded crictl archive
+  ansible.builtin.file:
+    path: "{{ crictl_archive_path }}"
+    state: absent
+
 - name: Check active swap
   ansible.builtin.command:
     argv:
@@ -300,3 +305,19 @@
     src: 192.168.56.0/24
     to_port: "{{ kubernetes_api_port }}"
     comment: Kubernetes API from Host-Only network
+
+- name: Ensure Kubernetes services are enabled
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+  loop:
+    - containerd
+    - kubelet
+
+- name: Create Kubernetes configuration directory
+  ansible.builtin.file:
+    path: /etc/kubernetes
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
