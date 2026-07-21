@@ -9,6 +9,8 @@ kubernetes_apt_key_url: >-
 
 kubernetes_apt_keyring_path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
+kubernetes_repository_ascii_key_path: /etc/apt/keyrings/kubernetes-release.key
+
 kubernetes_apt_source_path: /etc/apt/sources.list.d/kubernetes.list
 
 kubernetes_packages:
@@ -54,3 +56,18 @@ containerd_systemd_cgroup: true
 containerd_supported_major_versions:
   - "1"
   - "2"
+
+kubernetes_repository_url: >-
+  https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version_minor }}/deb/
+
+kubernetes_repository_key_url: >-
+  {{ kubernetes_repository_url }}Release.key
+
+kubernetes_repository_key_directory: /etc/apt/keyrings
+kubernetes_repository_key_path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+kubernetes_repository_filename: kubernetes
+
+kubernetes_kubelet_defaults_path: /etc/default/kubelet
+kubernetes_kubelet_extra_args:
+  - "--node-ip={{ kubernetes_api_address }}"
+  - "--container-runtime-endpoint=unix://{{ containerd_socket_path }}"

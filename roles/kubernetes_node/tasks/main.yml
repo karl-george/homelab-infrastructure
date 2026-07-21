@@ -10,6 +10,10 @@
       - (kubernetes_pod_network_cidr | ansible.utils.ipaddr) is not false
       - kubernetes_required_packages | length > 0
       - kubernetes_kernel_modules | length > 0
+      - kubernetes_repository_url | length > 0
+      - kubernetes_repository_key_url | length > 0
+      - kubernetes_packages | length > 0
+      - kubernetes_kubelet_extra_args | length > 0
     fail_msg: >-
       Kubernetes node configuration contains invalid values.
     success_msg: >-
@@ -91,6 +95,101 @@
     path: "{{ containerd_socket_path }}"
     state: present
     timeout: 30
+
+- name: Ensure APT keyring directory exists
+  ansible.builtin.file:
+    path: "{{ kubernetes_repository_key_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download Kuberenetes repository key
+  ansible.builtin.get_url:
+    url: "{{ kubernetes_repository_key_url }}"
+    dest: /tmp/kubernetes-release.key
+    owner: root
+    group: root
+    mode: "0644"
+  register: kubernetes_repository_key_download
+
+- name: Check for Kubernetes repository key
+  ansible.builtin.stat:
+    path: "{{ kubernetes_repository_key_path }}"
+  register: kubernetes_repository_key_stat
+
+- name: Convert Kubernetes signing key to GPG keyring
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --dearmor
+      - --yes
+      - --output
+      - "{{ kubernetes_repository_key_path }}"
+      - /tmp/kubernetes-release.key
+  when: >-
+    kubernetes_repository_key_download.changed
+    or
+    not kubernetes_repository_key_stat.stat.exists
+  changed_when: true
+
+- name: Set Kubernetes repository keyring permissions
+  ansible.builtin.file:
+    path: "{{ kubernetes_repository_key_path }}"
+    state: file
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure Kubernetes repository
+  ansible.builtin.deb822_repository:
+    name: "{{ kubernetes_repository_filename }}"
+    types:
+      - deb
+    uris:
+      - "{{ kubernetes_repository_url }}"
+    suites:
+      - /
+    signed_by: "{{ kubernetes_repository_key_path }}"
+    state: present
+    enabled: true
+  register: kubernetes_repository
+
+- name: Update APT package cache
+  ansible.builtin.apt:
+    update_cache: true
+  when: kubernetes_repository.changed
+
+- name: Install Kubernetes node packages
+  ansible.builtin.apt:
+    name: "{{ kubernetes_packages }}"
+    state: present
+
+- name: Hold Kubernetes packages at their installed versions
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: "{{ kubernetes_packages }}"
+
+- name: Configure kubelet node-specific arguments
+  ansible.builtin.template:
+    src: kubelet-defaults.j2
+    dest: "{{ kubernetes_kubelet_defaults_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart kubelet
+
+- name: Ensure kubelet is enabled
+  ansible.builtin.systemd_service:
+    name: kubelet
+    enabled: true
+    daemon_reload: true
+
+- name: Remove temp Kubernetes repo signing key
+  ansible.builtin.file:
+    path: /tmp/kubernetes-release.key
+    state: absent
 
 - name: Check active swap
   ansible.builtin.command:
