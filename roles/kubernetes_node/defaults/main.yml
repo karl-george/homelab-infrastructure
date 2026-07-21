@@ -71,3 +71,24 @@ kubernetes_kubelet_defaults_path: /etc/default/kubelet
 kubernetes_kubelet_extra_args:
   - "--node-ip={{ kubernetes_api_address }}"
   - "--container-runtime-endpoint=unix://{{ containerd_socket_path }}"
+
+crictl_version: "v{{ kubernetes_version_minor }}.0"
+crictl_architecture: amd64
+
+crictl_archive_name: >-
+  crictl-{{ crictl_version }}-linux-{{ crictl_architecture }}.tar.gz
+
+crictl_download_url: >-
+  https://github.com/kubernetes-sigs/cri-tools/releases/download/{{ crictl_version }}/{{ crictl_archive_name }}
+
+crictl_checksum_url: "{{ crictl_download_url }}.sha256"
+
+crictl_cache_directory: /var/cache/kubernetes
+crictl_archive_path: "{{ crictl_cache_directory }}/{{ crictl_archive_name }}"
+crictl_binary_path: /usr/local/bin/crictl
+crictl_config_path: /etc/crictl.yaml
+
+crictl_runtime_endpoint: "unix://{{ containerd_socket_path }}"
+crictl_image_endpoint: "unix://{{ containerd_socket_path }}"
+crictl_timeout: 10
+crictl_debug: false

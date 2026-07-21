@@ -14,6 +14,10 @@
       - kubernetes_repository_key_url | length > 0
       - kubernetes_packages | length > 0
       - kubernetes_kubelet_extra_args | length > 0
+      - crictl_version | length > 0
+      - crictl_download_url | length > 0
+      - crictl_runtime_endpoint | length > 0
+      - crictl_timeout | int > 0
     fail_msg: >-
       Kubernetes node configuration contains invalid values.
     success_msg: >-
@@ -190,6 +194,56 @@
   ansible.builtin.file:
     path: /tmp/kubernetes-release.key
     state: absent
+
+- name: Ensure Kubernetes download cache exists
+  ansible.builtin.file:
+    path: "{{ crictl_cache_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download crictl archive
+  ansible.builtin.get_url:
+    url: "{{ crictl_download_url }}"
+    dest: "{{ crictl_archive_path }}"
+    checksum: sha256:{{ crictl_checksum_url }}
+    owner: root
+    group: root
+    mode: "0644"
+  register: crictl_archive_download
+
+- name: Check installed crictl binary
+  ansible.builtin.stat:
+    path: "{{ crictl_binary_path }}"
+  register: crictl_binary
+
+- name: Install crictl binary
+  ansible.builtin.unarchive:
+    src: "{{ crictl_archive_path }}"
+    dest: /usr/local/bin
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - crictl_archive_download.changed or not crictl_binary.stat.exists
+
+- name: Configure crictl for containerd
+  ansible.builtin.template:
+    src: crictl.yaml.j2
+    dest: "{{ crictl_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Verify communication with containerd CRI
+  ansible.builtin.command:
+    argv:
+      - "{{ crictl_binary_path }}"
+      - info
+  register: crictl_info
+  changed_when: false
 
 - name: Check active swap
   ansible.builtin.command:
