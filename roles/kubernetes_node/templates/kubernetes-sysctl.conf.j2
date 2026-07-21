@@ -1,0 +1,3 @@
+{% for setting, value in kubernetes_sysctl_settings.items() %}
+{{ setting }}={{ value }}
+{% endfor %}
