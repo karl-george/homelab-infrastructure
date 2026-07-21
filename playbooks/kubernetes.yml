@@ -13,3 +13,10 @@
 
   roles:
     - kubernetes_control_plane
+
+- name: Install Kubernetes networking
+  hosts: kubernetes_control_plane
+  become: true
+
+  roles:
+    - kubernetes_networking

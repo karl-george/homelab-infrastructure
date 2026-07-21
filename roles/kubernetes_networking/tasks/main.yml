@@ -1,0 +1,34 @@
+---
+- name: Download Flannel manifest
+  ansible.builtin.get_url:
+    url: "{{ flannel_manifest_url }}"
+    dest: "{{ flannel_manifest_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Apply Flannel manifest
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - /etc/kubernetes/admin.conf
+      - apply
+      - -f
+      - "{{ flannel_manifest_path }}"
+  register: flannel_apply
+  changed_when: >-
+    'created' in flannel_apply.stdout
+    or
+    'configured' in flannel_apply.stdout
+
+- name: Verify Flannel namespace
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - /etc/kubernetes/admin.conf
+      - get
+      - namespace
+      - "{{ flannel_namespace }}"
+  changed_when: false
