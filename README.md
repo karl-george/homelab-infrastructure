@@ -297,3 +297,23 @@ ansible-playbook \
 -i inventories/production/hosts.ini \
 playbooks/site.yml
 ```
+
+## Kubernetes Application Deployment
+
+The Employee Directory application can now be deployed to the kubeadm-based
+Kubernetes cluster using native Kubernetes manifests.
+
+The deployment is stored under:
+
+```text
+kubernetes/employee-directory/
+```
+
+It currently includes:
+
+- a dedicated Namespace;
+- a Deployment managing the application Pod;
+- a ClusterIP Service providing stable internal access;
+- Kubernetes-standard application labels;
+- rolling update and rollback support;
+- application-specific deployment and troubleshooting documentation.

@@ -666,3 +666,77 @@ Loki readiness:
 ```bash
 curl http://192.168.56.10:3100/ready
 ```
+
+## Kubernetes deployment procedure
+
+### Prerequisites
+
+- The Kubernetes node reports `Ready`.
+- Flannel and CoreDNS are running.
+- The Employee Directory image has been published to the configured registry.
+- The Kubernetes node can reach the container registry.
+- `kubectl` is configured to access the cluster.
+
+### Deploy
+
+From the infrastructure repository root:
+
+```bash
+kubectl apply \
+  -f kubernetes/employee-directory/namespace.yaml
+
+kubectl apply \
+  -f kubernetes/employee-directory/deployment.yaml
+
+kubectl apply \
+  -f kubernetes/employee-directory/service.yaml
+```
+
+### Validate
+
+```bash
+kubectl rollout status \
+  deployment/employee-directory \
+  -n employee-directory \
+  --timeout=180s
+
+kubectl get all \
+  -n employee-directory
+
+kubectl get endpoints \
+  employee-directory \
+  -n employee-directory
+
+kubectl logs \
+  deployment/employee-directory \
+  -n employee-directory
+```
+
+### Roll back
+
+```bash
+kubectl rollout undo \
+  deployment/employee-directory \
+  -n employee-directory
+
+kubectl rollout status \
+  deployment/employee-directory \
+  -n employee-directory \
+  --timeout=180s
+```
+
+After an emergency rollback, update or reapply the Git-managed manifest so that
+the repository and live cluster do not remain out of sync.
+
+### Remove
+
+```bash
+kubectl delete \
+  -f kubernetes/employee-directory/service.yaml
+
+kubectl delete \
+  -f kubernetes/employee-directory/deployment.yaml
+
+kubectl delete \
+  -f kubernetes/employee-directory/namespace.yaml
+```
