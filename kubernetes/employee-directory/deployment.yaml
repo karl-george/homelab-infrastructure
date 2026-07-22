@@ -44,4 +44,4 @@ spec:
           ports:
             - name: http
               containerPort: 8000
-              protocol: TCp
+              protocol: TCP
