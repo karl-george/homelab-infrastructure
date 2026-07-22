@@ -1,30 +1,31 @@
 # Homelab Infrastructure
 
-A production-style DevOps home lab built to develop practical experience with modern infrastructure automation, configuration management, web application deployment, reverse proxying, containerisation, and centralised monitoring.
+A production-style DevOps homelab built to develop practical experience with infrastructure automation, configuration management, containerisation, Kubernetes, observability and application deployment.
 
-This project serves as both a learning platform and a portfolio demonstrating infrastructure managed using Infrastructure as Code (IaC) principles rather than manual configuration.
+The entire environment is managed using **Infrastructure as Code (IaC)** principles, with the objective of creating reproducible, production-inspired infrastructure rather than manually configured virtual machines.
 
 ---
 
 # Project Goals
 
-The primary goals of this repository are to:
+This repository exists to:
 
 - Build infrastructure using repeatable automation.
 - Follow Infrastructure as Code best practices.
 - Learn industry-standard DevOps tooling.
-- Create production-like environments for testing.
+- Deploy applications using modern infrastructure platforms.
+- Create production-like environments for experimentation.
 - Document every stage of the deployment process.
-- Maintain idempotent Ansible playbooks and roles.
-- Provide a foundation for future Kubernetes and CI/CD work.
+- Maintain reusable, idempotent Ansible roles.
+- Build a foundation for future cloud and CI/CD projects.
 
-Every change to the infrastructure is version controlled, documented and reproducible.
+Every infrastructure change is version controlled, documented and reproducible.
 
 ---
 
 # Lab Architecture
 
-The lab currently consists of multiple Ubuntu Server virtual machines running inside VirtualBox.
+The lab consists of multiple Ubuntu Server virtual machines running in VirtualBox.
 
 ```
                     Ubuntu Desktop
@@ -34,49 +35,65 @@ The lab currently consists of multiple Ubuntu Server virtual machines running in
      Host Only Network               NAT Network
      (192.168.56.0/24)             Internet Access
           │
- ┌────────┴─────────┐
- │                  │
-Automation VM   Other Servers
+ ┌────────┴──────────────────────────────────────┐
+ │                                               │
+ │                 Virtual Machines              │
+ │                                               │
+ │  automation   Ansible Control Node            │
+ │  web01        Production Web Server           │
+ │  web02        Staging Web Server              │
+ │  monitoring   Observability Stack             │
+ │  k8s-lab      Kubernetes Cluster              │
+ └───────────────────────────────────────────────┘
 ```
 
-Current infrastructure:
+---
 
-| Host       | Purpose                                    |
-| ---------- | ------------------------------------------ |
-| automation | Ansible control node and management server |
-| web01      | Production web server                      |
-| web02      | Staging web server                         |
-| monitoring | Grafana, Loki and Alloy logging stack      |
+# Current Infrastructure
+
+| Host       | Purpose                                                               |
+| ---------- | --------------------------------------------------------------------- |
+| automation | Ansible control node, Docker build host and Kubernetes administration |
+| web01      | Production application server                                         |
+| web02      | Staging application server                                            |
+| monitoring | Grafana, Loki and Alloy monitoring stack                              |
+| k8s-lab    | Single-node Kubernetes cluster                                        |
 
 ---
 
 # Technologies Used
 
-## Operating System
+## Operating Systems
 
 - Ubuntu Server LTS
 - Ubuntu Desktop
 
-## Configuration Management
+## Infrastructure as Code
 
 - Ansible
-
-## Web Stack
-
-- Nginx
-- Gunicorn
-- Flask
-
-## Monitoring
-
-- Grafana
-- Loki
-- Alloy
 
 ## Containers
 
 - Docker
 - Docker Compose
+- GitHub Container Registry (GHCR)
+
+## Container Orchestration
+
+- Kubernetes (kubeadm)
+- kubectl
+
+## Web Stack
+
+- Flask
+- Gunicorn
+- Nginx
+
+## Monitoring & Logging
+
+- Grafana
+- Loki
+- Alloy
 
 ## Version Control
 
@@ -92,72 +109,70 @@ homelab-infrastructure/
 │
 ├── inventories/
 │   ├── production/
-│   └── staging/
+│   ├── staging/
+│   ├── monitoring/
+│   ├── observability/
+│   └── kubernetes/
+│
+├── kubernetes/
+│   └── employee-directory/
 │
 ├── playbooks/
 │
 ├── roles/
-│   ├── common/
-│   ├── docker_engine/
-│   ├── employee_app/
-│   ├── grafana/
-│   ├── loki/
-│   ├── alloy/
-│   ├── monitoring_stack/
-│   ├── nginx/
-│   └── ...
 │
 ├── documentation/
 │
-├── files/
-│
 ├── templates/
+│
+├── files/
 │
 └── README.md
 ```
 
-The repository is organised around reusable Ansible roles. Each role is responsible for deploying and configuring a single service or component.
+Infrastructure is organised into reusable Ansible roles and Kubernetes manifests to encourage modularity and repeatability.
 
 ---
 
 # Infrastructure Philosophy
 
-This repository avoids manual server configuration wherever possible.
+Infrastructure should be reproducible.
 
-Infrastructure changes should be made by:
+Servers are treated as disposable resources and should be rebuilt through automation rather than manually configured.
 
-1. Updating Ansible code.
-2. Committing the changes.
-3. Running the playbooks.
-4. Verifying the deployment.
+The normal workflow is:
 
-Servers should be considered disposable. A freshly provisioned server should be capable of being configured entirely from this repository.
+1. Modify infrastructure code.
+2. Commit changes.
+3. Execute Ansible playbooks.
+4. Validate the deployment.
+5. Repeat safely using idempotent automation.
 
 ---
 
 # Current Features
 
-## Common Server Configuration
+## Base Server Configuration
 
-- Package updates
+- Package management
 - Common utilities
+- SSH configuration
 - Firewall configuration
-- SSH access
 - Idempotent provisioning
 
 ---
 
 ## Employee Directory Application
 
-Deployment of a Flask web application including:
+Automated deployment of a Flask application including:
 
 - Git checkout
 - Python virtual environment
 - Dependency installation
 - Gunicorn service
 - Systemd integration
-- Health checks
-- Automatic service restarts
+- Health verification
+- Automatic service recovery
 
 ---
 
@@ -165,122 +180,134 @@ Deployment of a Flask web application including:
 
 Nginx configured as a reverse proxy providing:
 
-- HTTP request forwarding
+- Request forwarding
 - Security headers
 - Gunicorn isolation
-- Production-style deployment
+- Production deployment model
 
 ---
 
-## Docker
+## Docker Platform
 
-Automated installation of:
+Automated installation and configuration of:
 
 - Docker Engine
 - Docker Compose
-- Official Docker repositories
+- Docker repositories
 - Docker service management
+
+---
+
+## Kubernetes
+
+A single-node Kubernetes cluster built with **kubeadm**.
+
+Current capabilities include:
+
+- Cluster administration using `kubectl`
+- Application deployment using Kubernetes manifests
+- Namespace isolation
+- Deployments
+- ReplicaSets
+- Pods
+- ClusterIP Services
+- Rolling updates
+- Rollback support
+- Container images hosted in GitHub Container Registry
+
+The Employee Directory application is deployed to Kubernetes using manifests stored in:
+
+```
+kubernetes/employee-directory/
+```
 
 ---
 
 ## Centralised Logging
 
-The monitoring stack provides centralised log collection across the lab.
-
-Components:
+The monitoring stack provides centralised log collection.
 
 ### Grafana
 
-Provides dashboards and log exploration.
+Provides dashboards for:
 
-Features include:
-
-- Service log volume
-- Log search
-- Error filtering
-- HTTP request monitoring
-
----
+- Log exploration
+- Error investigation
+- Service monitoring
 
 ### Loki
 
-Stores all application and system logs.
+Provides:
 
-Features include:
-
+- Central log storage
 - Label-based indexing
-- Efficient log querying
-- LogQL support
-- Integration with Grafana
-
----
+- LogQL querying
 
 ### Alloy
 
-Collects logs from monitored servers.
-
-Current sources include:
+Collects logs including:
 
 - Nginx access logs
 - Nginx error logs
 - System logs
 
-All logs are labelled with:
+Logs are labelled by:
 
 - Environment
 - Host
 - Service
 
-allowing dashboards to filter logs dynamically.
+allowing dashboards to dynamically filter log data.
 
 ---
 
 # Monitoring Dashboard
 
-The logging dashboard currently provides:
+Current dashboards provide:
 
 - Log volume by service
 - HTTP response status counts
-- Recent HTTP errors
-- Complete searchable log stream
-- Error and failure log filtering
+- Recent HTTP failures
+- Searchable log streams
+- Error filtering
 
 Dashboard variables allow filtering by:
 
 - Environment
 - Host
 - Service
-- Free-text search
+- Search query
 
 ---
 
-# Environments
+# Deployment Environments
 
 Separate inventories are maintained for:
 
 ## Production
 
-Contains the production web server and monitoring infrastructure.
+Production application deployment.
 
 ## Staging
 
-Used for validating deployments before production rollout.
+Application validation before production deployment.
 
-This separation mirrors common production deployment practices.
+This separation mirrors common deployment workflows used in production environments.
 
 ---
 
 # Security
 
-Several basic hardening measures have been implemented:
+Current hardening measures include:
 
 - UFW firewall
+- SSH administration
 - Reverse proxy architecture
 - Gunicorn bound to localhost
 - Security response headers
+- Non-root application execution where appropriate
 - Principle of least privilege
-- SSH-based administration
-- Configuration managed through Ansible
+- Infrastructure managed through Ansible
 
 ---
 
@@ -288,32 +315,36 @@ Several basic hardening measures have been implemented:
 
 Infrastructure is deployed using idempotent Ansible playbooks.
 
-Running a playbook repeatedly should leave servers in the same desired state without unnecessary changes.
-
-Typical deployment:
+Example:
 
 ```bash
 ansible-playbook \
--i inventories/production/hosts.ini \
-playbooks/site.yml
+  -i inventories/production/hosts.ini \
+  playbooks/site.yml
 ```
 
-## Kubernetes Application Deployment
+---
 
-The Employee Directory application can now be deployed to the kubeadm-based
-Kubernetes cluster using native Kubernetes manifests.
+# Kubernetes Deployment
 
-The deployment is stored under:
+The Employee Directory application is deployed to Kubernetes using native manifests.
 
-```text
-kubernetes/employee-directory/
-```
+Deployment currently includes:
 
-It currently includes:
+- Namespace
+- Deployment
+- ReplicaSet
+- Pod
+- ClusterIP Service
 
-- a dedicated Namespace;
-- a Deployment managing the application Pod;
-- a ClusterIP Service providing stable internal access;
-- Kubernetes-standard application labels;
-- rolling update and rollback support;
-- application-specific deployment and troubleshooting documentation.
+Application images are:
+
+- Containerised with Docker
+- Published to GitHub Container Registry
+- Pulled directly by Kubernetes
+
+Deployments support:
+
+- Rolling updates
+- Rollbacks
+- Image versioning
